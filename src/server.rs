@@ -4,6 +4,7 @@ use anyhow::Result;
 use tokio::net::TcpListener;
 
 use crate::config::Config;
+use crate::connection::handle_connection;
 
 pub struct Shared {
     pub config: Config,
@@ -29,8 +30,11 @@ pub async fn connections_loop(listener: TcpListener, shared: Arc<Shared>) -> Res
     loop {
         let (socket, peer) = listener.accept().await?;
         log::debug!("accepted connection from {}", peer);
+        let shared = Arc::clone(&shared);
         tokio::spawn(async move {
-            todo!()
+            if let Err(e) = handle_connection(socket, shared).await {
+                log::error!("connection error from {}: {}", peer, e);
+            }
         });
     }
 }

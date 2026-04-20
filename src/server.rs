@@ -18,7 +18,7 @@ impl Shared {
 
 /// Binds the TCP listener and starts the connections loop
 pub async fn run(config: Config) -> Result<()> {
-    let addr = format!("0.0.0.0:{}", config.port);
+    let addr = format!("{}:{}", config.host, config.port);
     let listener = TcpListener::bind(&addr).await?;
     log::info!("listening on {}", listener.local_addr()?);
     let shared = Shared::create(config);

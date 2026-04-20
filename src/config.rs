@@ -9,6 +9,10 @@ pub struct Config {
     #[arg(long, default_value = "9736")]
     pub port: u16,
 
+    /// TCP host to listen on
+    #[arg(long, default_value = "0.0.0.0")]
+    pub host: String,
+
     /// Path to the JSON snapshot file
     #[arg(long, default_value = "dump.json")]
     pub snapshot_path: PathBuf,

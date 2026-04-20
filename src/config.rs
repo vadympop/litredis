@@ -5,6 +5,8 @@ use clap::Parser;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+/// CLI-parsed partial config, every field is Option so unset args stay None
+/// and don't override lower-priority sources during the merge.
 #[derive(Parser, Serialize, Deserialize, Default)]
 #[command(name = "litredis", about = "Async in-memory key-value server")]
 struct PartialConfig {
@@ -34,6 +36,7 @@ struct PartialConfig {
     config_file: Option<PathBuf>,
 }
 
+/// Final resolved configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub port: u16,
@@ -56,6 +59,7 @@ impl Default for Config {
 }
 
 impl Config {
+    /// Parse CLI args, optionally overlay a JSON config file, return resolved Config
     pub fn load() -> Result<Self> {
         let cli = PartialConfig::parse();
         let file = match &cli.config_file {
@@ -69,6 +73,7 @@ impl Config {
     }
 }
 
+/// Merge order: defaults -> file -> CLI
 fn build_config(cli: PartialConfig, file: PartialConfig) -> Result<Config> {
     let mut merged = serde_json::to_value(Config::default())?;
     json_merge(&mut merged, serde_json::to_value(&file)?);
@@ -76,6 +81,9 @@ fn build_config(cli: PartialConfig, file: PartialConfig) -> Result<Config> {
     Ok(serde_json::from_value(merged)?)
 }
 
+/// Recursively overlay `over` onto `base`, skipping null values in `over`
+/// so that a None (= null) in a higher-priority source doesn't erase a value
+/// that was already set by a lower-priority source.
 fn json_merge(base: &mut Value, over: Value) {
     match (base, over) {
         (Value::Object(b), Value::Object(o)) => {

@@ -85,3 +85,73 @@ fn split_args(input: &str) -> Result<Vec<String>> {
 
     Ok(args)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn split_plain() {
+        assert_eq!(split_args("SET foo bar").unwrap(), ["SET", "foo", "bar"]);
+    }
+
+    #[test]
+    fn split_quoted() {
+        assert_eq!(
+            split_args(r#"ECHO "hello world""#).unwrap(),
+            ["ECHO", "hello world"]
+        );
+    }
+
+    #[test]
+    fn split_escaped_quote() {
+        assert_eq!(
+            split_args(r#"ECHO "say \"hi\"""#).unwrap(),
+            ["ECHO", r#"say "hi""#]
+        );
+    }
+
+    #[test]
+    fn unterminated_string() {
+        assert!(split_args(r#"ECHO "oops"#).is_err());
+    }
+
+    #[test]
+    fn parse_ping_bare() {
+        assert!(matches!(parse_command("PING"), Ok(Command::Ping(None))));
+    }
+
+    #[test]
+    fn parse_ping_msg() {
+        assert!(matches!(
+            parse_command("PING hello"),
+            Ok(Command::Ping(Some(_)))
+        ));
+    }
+
+    #[test]
+    fn parse_echo() {
+        assert!(matches!(parse_command("ECHO hi"), Ok(Command::Echo(_))));
+    }
+
+    #[test]
+    fn encode_simple() {
+        assert_eq!(encode_reply(&Reply::Simple("OK".into())), "+OK\r\n");
+    }
+
+    #[test]
+    fn encode_error() {
+        assert_eq!(
+            encode_reply(&Reply::Error("bad".into())),
+            "-ERR bad\r\n"
+        );
+    }
+
+    #[test]
+    fn encode_bulk() {
+        assert_eq!(
+            encode_reply(&Reply::Bulk("hello".into())),
+            "$5\r\nhello\r\n"
+        );
+    }
+}

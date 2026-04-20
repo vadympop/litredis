@@ -4,7 +4,7 @@ use anyhow::Result;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 
-use crate::protocol::text::{encode_reply, parse_command, Command, Reply};
+use crate::protocol::text::{Command, Reply, encode_reply, parse_command};
 use crate::server::Shared;
 
 pub async fn handle_connection(stream: TcpStream, _shared: Arc<Shared>) -> Result<()> {

@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 #[derive(Debug)]
 pub enum Command {
@@ -141,10 +141,7 @@ mod tests {
 
     #[test]
     fn encode_error() {
-        assert_eq!(
-            encode_reply(&Reply::Error("bad".into())),
-            "-ERR bad\r\n"
-        );
+        assert_eq!(encode_reply(&Reply::Error("bad".into())), "-ERR bad\r\n");
     }
 
     #[test]

@@ -10,7 +10,7 @@ use tokio::{
 };
 
 async fn spawn_server() -> u16 {
-    let test_host = "127.0.0.1".to_string(); 
+    let test_host = "127.0.0.1".to_string();
     let listener = TcpListener::bind(format!("{}:0", test_host)).await.unwrap();
     let port = listener.local_addr().unwrap().port();
     let config = Config {

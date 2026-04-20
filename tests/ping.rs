@@ -2,7 +2,7 @@ use std::{path::PathBuf, time::Duration};
 
 use redis_app::{
     config::Config,
-    server::{connections_loop, Shared},
+    server::{Shared, connections_loop},
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -10,10 +10,12 @@ use tokio::{
 };
 
 async fn spawn_server() -> u16 {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let test_host = "127.0.0.1".to_string(); 
+    let listener = TcpListener::bind(format!("{}:0", test_host)).await.unwrap();
     let port = listener.local_addr().unwrap().port();
     let config = Config {
         port,
+        host: test_host,
         snapshot_path: PathBuf::from("dump.json"),
         flush_interval: 300,
         password: None,

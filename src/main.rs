@@ -1,7 +1,10 @@
-mod config;
-mod server;
+use clap::Parser;
+use redis_app::{config::Config, server};
 
-fn main() {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     env_logger::init();
-    log::info!("redis-app starting");
+    let config = Config::parse();
+    log::info!("litredis starting on port {}", config.port);
+    server::run(config).await
 }

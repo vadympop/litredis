@@ -4,10 +4,11 @@ use anyhow::Result;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 
-use crate::protocol::text::{Command, Reply, encode_reply, parse_command};
+use crate::commands;
+use crate::protocol::text::{Reply, encode_reply, parse_command};
 use crate::server::Shared;
 
-pub async fn handle_connection(stream: TcpStream, _shared: Arc<Shared>) -> Result<()> {
+pub async fn handle_connection(stream: TcpStream, shared: Arc<Shared>) -> Result<()> {
     let (reader, mut writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
     let mut line = String::new();
@@ -20,7 +21,7 @@ pub async fn handle_connection(stream: TcpStream, _shared: Arc<Shared>) -> Resul
         }
 
         let reply = match parse_command(&line) {
-            Ok(cmd) => dispatch(cmd),
+            Ok(cmd) => commands::execute(cmd, &shared),
             Err(e) => Reply::Error(e.to_string()),
         };
 
@@ -28,12 +29,4 @@ pub async fn handle_connection(stream: TcpStream, _shared: Arc<Shared>) -> Resul
     }
 
     Ok(())
-}
-
-fn dispatch(cmd: Command) -> Reply {
-    match cmd {
-        Command::Ping(None) => Reply::Simple("PONG".into()),
-        Command::Ping(Some(msg)) => Reply::Bulk(msg),
-        Command::Echo(msg) => Reply::Bulk(msg),
-    }
 }

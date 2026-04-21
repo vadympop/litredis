@@ -2,9 +2,9 @@ pub mod misc;
 pub mod strings;
 pub mod ttl;
 
-use std::sync::Arc;
 use crate::protocol::{Command, Reply};
 use crate::server::Shared;
+use std::sync::Arc;
 
 pub fn execute(cmd: Command, _shared: &Arc<Shared>) -> Reply {
     match cmd {
@@ -17,6 +17,6 @@ pub fn execute(cmd: Command, _shared: &Arc<Shared>) -> Reply {
         Command::Incr { key } => strings::incr(_shared, key, 1),
         Command::Decr { key } => strings::incr(_shared, key, -1),
         Command::Expire { .. } => Reply::Nil,
-        Command::Ttl { .. } => Reply::Nil
+        Command::Ttl { .. } => Reply::Nil,
     }
 }

@@ -14,14 +14,22 @@ pub struct StoreEntry {
 
 impl StoreEntry {
     pub fn str(value: String, expires_at: Option<Instant>) -> Self {
-        StoreEntry { value: EntryValue::Str(value), expires_at }
+        StoreEntry {
+            value: EntryValue::Str(value),
+            expires_at,
+        }
     }
 
     pub fn int(value: i64, expires_at: Option<Instant>) -> Self {
-        StoreEntry { value: EntryValue::Int(value), expires_at }
+        StoreEntry {
+            value: EntryValue::Int(value),
+            expires_at,
+        }
     }
 
     pub fn is_expired(&self) -> bool {
-        self.expires_at.map(|t| t <= Instant::now()).unwrap_or(false)
+        self.expires_at
+            .map(|t| t <= Instant::now())
+            .unwrap_or(false)
     }
 }

@@ -9,12 +9,15 @@ use crate::store::Store;
 
 pub struct Shared {
     pub config: Config,
-    pub store: Store
+    pub store: Store,
 }
 
 impl Shared {
     pub fn create(config: Config) -> Arc<Shared> {
-        Arc::new(Shared { config, store: Store::new() })
+        Arc::new(Shared {
+            config,
+            store: Store::new(),
+        })
     }
 }
 

@@ -14,9 +14,9 @@ pub fn get(_shared: &Shared, key: String) -> Reply {
     match store.get(&key) {
         Ok(x) => match x {
             Some(x) => Reply::Bulk(x),
-            None => Reply::Nil
+            None => Reply::Nil,
         },
-        Err(m) => Reply::Error(m.to_string())
+        Err(m) => Reply::Error(m.to_string()),
     }
 }
 
@@ -35,6 +35,6 @@ pub fn incr(_shared: &Shared, key: String, delta: i64) -> Reply {
     let store = &_shared.store;
     match store.incr(&key, delta) {
         Ok(x) => Reply::Integer(x),
-        Err(m) => Reply::Error(m.to_string())
+        Err(m) => Reply::Error(m.to_string()),
     }
 }

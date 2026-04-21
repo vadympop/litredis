@@ -7,14 +7,15 @@ use dashmap::DashMap;
 
 use entry::{EntryValue, StoreEntry};
 
-
 pub struct Store {
     data: DashMap<String, StoreEntry>,
 }
 
 impl Store {
     pub fn new() -> Self {
-        Store { data: DashMap::new() }
+        Store {
+            data: DashMap::new(),
+        }
     }
 
     /// Returns `None` if the key is missing or expired.
@@ -56,7 +57,8 @@ impl Store {
     /// Increments the integer value of a key by `delta` (use -1 for DECR).
     /// Missing key is treated as 0. Returns `Err` if the value is not an integer.
     pub fn incr(&self, key: &str, delta: i64) -> Result<i64> {
-        let mut entry = self.data
+        let mut entry = self
+            .data
             .entry(key.to_string())
             .or_insert_with(|| StoreEntry::int(0, None));
 

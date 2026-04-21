@@ -2,35 +2,28 @@ use crate::protocol::{Command, Reply};
 use anyhow::{Result, bail};
 
 pub fn parse_command(line: &str) -> Result<Command> {
-    let args = split_args(line.trim())?;
-    let upper = args.iter().map(|s| s.to_uppercase()).collect::<Vec<_>>();
+    let mut args = split_args(line.trim())?;
+    if args.is_empty() {
+        bail!("empty command");
+    }
+    args[0].make_ascii_uppercase();
 
     // Dont use values directly from slice-pattern because there are UPPER values,
     // but commands required original
-    match upper.as_slice() {
+    match args.as_slice() {
         [cmd] if cmd == "PING" => Ok(Command::Ping(None)),
-        [cmd, _] if cmd == "PING" => Ok(Command::Ping(Some(args[1].clone()))),
-        [cmd, _] if cmd == "ECHO" => Ok(Command::Echo(args[1].clone())),
+        [cmd, key] if cmd == "PING" => Ok(Command::Ping(Some(key.clone()))),
+        [cmd, key] if cmd == "ECHO" => Ok(Command::Echo(key.clone())),
 
-        [cmd, _] if cmd == "GET" => Ok(Command::Get {
-            key: args[1].clone(),
+        [cmd, key] if cmd == "GET" => Ok(Command::Get { key: key.clone() }),
+        [cmd, key, value] if cmd == "SET" => Ok(Command::Set {
+            key: key.clone(),
+            value: value.clone(),
         }),
-        [cmd, _, _] if cmd == "SET" => Ok(Command::Set {
-            key: args[1].clone(),
-            value: args[2].clone(),
-        }),
-        [cmd, _] if cmd == "DEL" => Ok(Command::Del {
-            key: args[1].clone(),
-        }),
-        [cmd, _] if cmd == "EXISTS" => Ok(Command::Exists {
-            key: args[1].clone(),
-        }),
-        [cmd, _] if cmd == "INCR" => Ok(Command::Incr {
-            key: args[1].clone(),
-        }),
-        [cmd, _] if cmd == "DECR" => Ok(Command::Decr {
-            key: args[1].clone(),
-        }),
+        [cmd, key] if cmd == "DEL" => Ok(Command::Del { key: key.clone() }),
+        [cmd, key] if cmd == "EXISTS" => Ok(Command::Exists { key: key.clone() }),
+        [cmd, key] if cmd == "INCR" => Ok(Command::Incr { key: key.clone() }),
+        [cmd, key] if cmd == "DECR" => Ok(Command::Decr { key: key.clone() }),
 
         [cmd, ..] => bail!("unknown or wrong-arity command '{}'", cmd),
         [] => bail!("empty command"),

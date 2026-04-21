@@ -5,14 +5,16 @@ use tokio::net::TcpListener;
 
 use crate::config::Config;
 use crate::connection::handle_connection;
+use crate::store::Store;
 
 pub struct Shared {
     pub config: Config,
+    pub store: Store
 }
 
 impl Shared {
     pub fn create(config: Config) -> Arc<Shared> {
-        Arc::new(Shared { config })
+        Arc::new(Shared { config, store: Store::new() })
     }
 }
 

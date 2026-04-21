@@ -1,4 +1,4 @@
-use crate::protocol::text::Reply;
+use crate::protocol::Reply;
 
 pub fn ping(msg: Option<String>) -> Reply {
     match msg {

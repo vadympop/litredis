@@ -1,19 +1,5 @@
-use anyhow::{Result, bail};
-
-#[derive(Debug)]
-pub enum Command {
-    Ping(Option<String>),
-    Echo(String),
-}
-
-#[derive(Debug)]
-pub enum Reply {
-    Simple(String),
-    Error(String),
-    Integer(i64),
-    Bulk(String),
-    Nil,
-}
+use anyhow::{bail, Result};
+use crate::protocol::{Command, Reply};
 
 pub fn parse_command(line: &str) -> Result<Command> {
     let args = split_args(line.trim())?;

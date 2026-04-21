@@ -12,11 +12,8 @@ pub fn set(shared: &Shared, key: String, value: String) -> Reply {
 pub fn get(shared: &Shared, key: String) -> Reply {
     let store = &shared.store;
     match store.get(&key) {
-        Ok(x) => match x {
-            Some(x) => Reply::Bulk(x),
-            None => Reply::Nil,
-        },
-        Err(m) => Reply::Error(m.to_string()),
+        Some(x) => Reply::Bulk(x),
+        None => Reply::Nil,
     }
 }
 

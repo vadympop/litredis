@@ -19,18 +19,17 @@ impl Store {
     }
 
     /// Returns `None` if the key is missing or expired.
-    /// Returns `Err` if the key holds a non-string type.
-    pub fn get(&self, key: &str) -> Result<Option<String>> {
+    pub fn get(&self, key: &str) -> Option<String> {
         match self.data.get(key) {
-            None => Ok(None),
+            None => None,
             Some(r) if r.is_expired() => {
                 drop(r);
                 self.data.remove(key);
-                Ok(None)
+                None
             }
             Some(r) => match &r.value().value {
-                EntryValue::Str(s) => Ok(Some(s.clone())),
-                EntryValue::Int(n) => Ok(Some(n.to_string())),
+                EntryValue::Str(s) => Some(s.clone()),
+                EntryValue::Int(n) => Some(n.to_string()),
             },
         }
     }

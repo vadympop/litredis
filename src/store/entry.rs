@@ -32,4 +32,13 @@ impl StoreEntry {
             .map(|t| t <= Instant::now())
             .unwrap_or(false)
     }
+
+    pub fn flush(&mut self) -> &mut Self {
+        self.value = match self.value {
+            EntryValue::Str(_) => EntryValue::Str(String::new()),
+            EntryValue::Int(_) => EntryValue::Int(0),
+        };
+        self.expires_at = None;
+        self
+    }
 }

@@ -61,6 +61,10 @@ impl Store {
             .entry(key.to_string())
             .or_insert_with(|| StoreEntry::int(0, None));
 
+        if entry.is_expired() {
+            entry.flush();
+        }
+
         let current: i64 = match &entry.value {
             EntryValue::Int(n) => *n,
             EntryValue::Str(s) => s

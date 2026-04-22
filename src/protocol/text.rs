@@ -1,44 +1,47 @@
+use crate::protocol::{Command, Reply};
 use anyhow::{Result, bail};
 
-#[derive(Debug)]
-pub enum Command {
-    Ping(Option<String>),
-    Echo(String),
-}
-
-#[derive(Debug)]
-pub enum Reply {
-    Simple(String),
-    Error(String),
-    Integer(i64),
-    Bulk(String),
-    Nil,
-}
+#[cfg(windows)]
+const LINE_ENDING: &str = "\r\n";
+#[cfg(not(windows))]
+const LINE_ENDING: &str = "\n";
 
 pub fn parse_command(line: &str) -> Result<Command> {
-    let args = split_args(line.trim())?;
+    let mut args = split_args(line.trim())?;
     if args.is_empty() {
         bail!("empty command");
     }
-    match args[0].to_uppercase().as_str() {
-        "PING" => Ok(Command::Ping(args.into_iter().nth(1))), // this variant consumes Vec, instead of simple .get(
-        "ECHO" => {
-            if args.len() < 2 {
-                bail!("wrong number of arguments for 'echo'");
-            }
-            Ok(Command::Echo(args.into_iter().nth(1).unwrap()))
-        }
-        cmd => bail!("unknown command '{}'", cmd),
+    args[0].make_ascii_uppercase();
+
+    // Dont use values directly from slice-pattern because there are UPPER values,
+    // but commands required original
+    match args.as_slice() {
+        [cmd] if cmd == "PING" => Ok(Command::Ping(None)),
+        [cmd, key] if cmd == "PING" => Ok(Command::Ping(Some(key.clone()))),
+        [cmd, key] if cmd == "ECHO" => Ok(Command::Echo(key.clone())),
+
+        [cmd, key] if cmd == "GET" => Ok(Command::Get { key: key.clone() }),
+        [cmd, key, value] if cmd == "SET" => Ok(Command::Set {
+            key: key.clone(),
+            value: value.clone(),
+        }),
+        [cmd, key] if cmd == "DEL" => Ok(Command::Del { key: key.clone() }),
+        [cmd, key] if cmd == "EXISTS" => Ok(Command::Exists { key: key.clone() }),
+        [cmd, key] if cmd == "INCR" => Ok(Command::Incr { key: key.clone() }),
+        [cmd, key] if cmd == "DECR" => Ok(Command::Decr { key: key.clone() }),
+
+        [cmd, ..] => bail!("unknown or wrong-arity command '{}'", cmd),
+        [] => bail!("empty command"),
     }
 }
 
 pub fn encode_reply(reply: &Reply) -> String {
     match reply {
-        Reply::Simple(s) => format!("+{}\r\n", s),
-        Reply::Error(s) => format!("-ERR {}\r\n", s),
-        Reply::Integer(n) => format!(":{}\r\n", n),
-        Reply::Bulk(s) => format!("${}\r\n{}\r\n", s.len(), s),
-        Reply::Nil => "$-1\r\n".to_string(),
+        Reply::Simple(s) => format!("+{}{}", s, LINE_ENDING),
+        Reply::Error(s) => format!("-ERR {}{}", s, LINE_ENDING),
+        Reply::Integer(n) => format!(":{}{}", n, LINE_ENDING),
+        Reply::Bulk(s) => format!("${}{}{}{1}", s.len(), LINE_ENDING, s),
+        Reply::Nil => format!("$-1{}", LINE_ENDING),
     }
 }
 
@@ -136,19 +139,25 @@ mod tests {
 
     #[test]
     fn encode_simple() {
-        assert_eq!(encode_reply(&Reply::Simple("OK".into())), "+OK\r\n");
+        assert_eq!(
+            encode_reply(&Reply::Simple("OK".into())),
+            format!("+OK{}", LINE_ENDING)
+        );
     }
 
     #[test]
     fn encode_error() {
-        assert_eq!(encode_reply(&Reply::Error("bad".into())), "-ERR bad\r\n");
+        assert_eq!(
+            encode_reply(&Reply::Error("bad".into())),
+            format!("-ERR bad{}", LINE_ENDING)
+        );
     }
 
     #[test]
     fn encode_bulk() {
         assert_eq!(
             encode_reply(&Reply::Bulk("hello".into())),
-            "$5\r\nhello\r\n"
+            format!("$5{0}hello{0}", LINE_ENDING)
         );
     }
 }

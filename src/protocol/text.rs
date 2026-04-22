@@ -33,6 +33,7 @@ pub fn parse_command(line: &str) -> Result<Command> {
             key: key.clone(),
             seconds: value.parse::<u64>()?,
         }),
+        [cmd, key] if cmd == "TTL" => Ok(Command::Ttl { key: key.clone() }),
 
         [cmd, ..] => bail!("unknown or wrong-arity command '{}'", cmd),
         [] => bail!("empty command"),

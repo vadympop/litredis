@@ -17,6 +17,6 @@ pub fn execute(cmd: Command, shared: &Arc<Shared>) -> Reply {
         Command::Incr { key } => strings::incr(shared, key),
         Command::Decr { key } => strings::decr(shared, key),
         Command::Expire { key, seconds } => ttl::expire(shared, &key, seconds),
-        Command::Ttl { .. } => Reply::Nil,
+        Command::Ttl { key } => ttl::ttl(shared, &key),
     }
 }

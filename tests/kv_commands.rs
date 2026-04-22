@@ -48,7 +48,10 @@ async fn set_value_with_spaces() {
     common::read_reply(&mut r).await;
 
     w.write_all(b"GET msg\n").await.unwrap();
-    assert_eq!(common::read_reply(&mut r).await, common::bulk("hello world"));
+    assert_eq!(
+        common::read_reply(&mut r).await,
+        common::bulk("hello world")
+    );
 }
 
 // ── DEL ──────────────────────────────────────────────────────────────────────

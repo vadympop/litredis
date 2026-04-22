@@ -35,7 +35,10 @@ async fn echo_quoted() {
     let (mut r, mut w) = common::connect(port).await;
 
     w.write_all(b"ECHO \"hello world\"\n").await.unwrap();
-    assert_eq!(common::read_reply(&mut r).await, common::bulk("hello world"));
+    assert_eq!(
+        common::read_reply(&mut r).await,
+        common::bulk("hello world")
+    );
 }
 
 #[tokio::test]

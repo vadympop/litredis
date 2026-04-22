@@ -139,12 +139,18 @@ mod tests {
 
     #[test]
     fn encode_simple() {
-        assert_eq!(encode_reply(&Reply::Simple("OK".into())), format!("+OK{}", LINE_ENDING));
+        assert_eq!(
+            encode_reply(&Reply::Simple("OK".into())),
+            format!("+OK{}", LINE_ENDING)
+        );
     }
 
     #[test]
     fn encode_error() {
-        assert_eq!(encode_reply(&Reply::Error("bad".into())), format!("-ERR bad{}", LINE_ENDING));
+        assert_eq!(
+            encode_reply(&Reply::Error("bad".into())),
+            format!("-ERR bad{}", LINE_ENDING)
+        );
     }
 
     #[test]

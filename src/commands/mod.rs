@@ -14,8 +14,8 @@ pub fn execute(cmd: Command, shared: &Arc<Shared>) -> Reply {
         Command::Set { key, value } => strings::set(shared, key, value),
         Command::Del { key } => strings::del(shared, key),
         Command::Exists { key } => strings::exists(shared, key),
-        Command::Incr { key } => strings::incr(shared, key, 1),
-        Command::Decr { key } => strings::incr(shared, key, -1),
+        Command::Incr { key } => strings::incr(shared, key),
+        Command::Decr { key } => strings::decr(shared, key),
         Command::Expire { .. } => Reply::Nil,
         Command::Ttl { .. } => Reply::Nil,
     }

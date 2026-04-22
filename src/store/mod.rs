@@ -55,7 +55,7 @@ impl Store {
 
     /// Increments the integer value of a key by `delta` (use -1 for DECR).
     /// Missing key is treated as 0. Returns `Err` if the value is not an integer.
-    pub fn incr(&self, key: &str, delta: i64) -> Result<i64> {
+    pub fn incrby(&self, key: &str, delta: i64) -> Result<i64> {
         let mut entry = self
             .data
             .entry(key.to_string())

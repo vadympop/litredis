@@ -27,10 +27,18 @@ pub fn exists(shared: &Shared, key: String) -> Reply {
     Reply::Integer(store.exists(&key) as i64)
 }
 
+pub fn incr(shared: &Shared, key: String) -> Reply {
+    apply_delta(shared, key, 1)
+}
+
+pub fn decr(shared: &Shared, key: String) -> Reply {
+    apply_delta(shared, key, -1)
+}
+
 /// Used simultaneously for increment and decrement cmds, set `delta` to `1` or `-1`
-pub fn incr(shared: &Shared, key: String, delta: i64) -> Reply {
+fn apply_delta(shared: &Shared, key: String, delta: i64) -> Reply {
     let store = &shared.store;
-    match store.incr(&key, delta) {
+    match store.incrby(&key, delta) {
         Ok(x) => Reply::Integer(x),
         Err(m) => Reply::Error(m.to_string()),
     }

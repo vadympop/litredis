@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::{path::PathBuf, time::Duration};
 
 use redis_app::{
@@ -8,6 +10,35 @@ use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     net::{TcpListener, TcpStream},
 };
+
+#[cfg(windows)]
+pub const LINE_ENDING: &str = "\r\n";
+#[cfg(not(windows))]
+pub const LINE_ENDING: &str = "\n";
+
+// ── Reply builders (mirror encode_reply so tests stay in sync with the protocol) ──
+
+pub fn simple(s: &str) -> String {
+    format!("+{}{}", s, LINE_ENDING)
+}
+
+pub fn error(s: &str) -> String {
+    format!("-ERR {}{}", s, LINE_ENDING)
+}
+
+pub fn integer(n: i64) -> String {
+    format!(":{}{}", n, LINE_ENDING)
+}
+
+pub fn bulk(s: &str) -> String {
+    format!("${}{}{}{}", s.len(), LINE_ENDING, s, LINE_ENDING)
+}
+
+pub fn nil() -> String {
+    format!("$-1{}", LINE_ENDING)
+}
+
+// ── Server / connection helpers ───────────────────────────────────────────────
 
 pub async fn spawn_server() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -32,8 +63,7 @@ pub async fn connect(port: u16) -> (impl AsyncBufReadExt + Unpin, impl AsyncWrit
     (BufReader::new(r), w)
 }
 
-/// Reads a full reply from the server.
-/// For bulk strings reads both the header and body line and returns them joined.
+/// Reads a full reply. For bulk strings joins the header and body lines.
 pub async fn read_reply(r: &mut (impl AsyncBufReadExt + Unpin)) -> String {
     let mut line = String::new();
     r.read_line(&mut line).await.unwrap();

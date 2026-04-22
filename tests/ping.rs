@@ -8,7 +8,7 @@ async fn ping_bare() {
     let (mut r, mut w) = common::connect(port).await;
 
     w.write_all(b"PING\n").await.unwrap();
-    assert_eq!(common::read_reply(&mut r).await, "+PONG\r\n");
+    assert_eq!(common::read_reply(&mut r).await, common::simple("PONG"));
 }
 
 #[tokio::test]
@@ -17,7 +17,7 @@ async fn ping_with_message() {
     let (mut r, mut w) = common::connect(port).await;
 
     w.write_all(b"PING hello\n").await.unwrap();
-    assert_eq!(common::read_reply(&mut r).await, "$5\r\nhello\r\n");
+    assert_eq!(common::read_reply(&mut r).await, common::bulk("hello"));
 }
 
 #[tokio::test]
@@ -26,7 +26,7 @@ async fn echo_plain() {
     let (mut r, mut w) = common::connect(port).await;
 
     w.write_all(b"ECHO rust\n").await.unwrap();
-    assert_eq!(common::read_reply(&mut r).await, "$4\r\nrust\r\n");
+    assert_eq!(common::read_reply(&mut r).await, common::bulk("rust"));
 }
 
 #[tokio::test]
@@ -35,7 +35,7 @@ async fn echo_quoted() {
     let (mut r, mut w) = common::connect(port).await;
 
     w.write_all(b"ECHO \"hello world\"\n").await.unwrap();
-    assert_eq!(common::read_reply(&mut r).await, "$11\r\nhello world\r\n");
+    assert_eq!(common::read_reply(&mut r).await, common::bulk("hello world"));
 }
 
 #[tokio::test]
@@ -53,6 +53,6 @@ async fn multiple_commands_same_connection() {
     let (mut r, mut w) = common::connect(port).await;
 
     w.write_all(b"PING\nPING\n").await.unwrap();
-    assert_eq!(common::read_reply(&mut r).await, "+PONG\r\n");
-    assert_eq!(common::read_reply(&mut r).await, "+PONG\r\n");
+    assert_eq!(common::read_reply(&mut r).await, common::simple("PONG"));
+    assert_eq!(common::read_reply(&mut r).await, common::simple("PONG"));
 }

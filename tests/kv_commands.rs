@@ -217,3 +217,43 @@ async fn expire_removes_key_after_timeout() {
     w.write_all(b"GET temp\n").await.unwrap();
     assert_eq!(common::read_reply(&mut r).await, common::nil());
 }
+
+// ── TTL ──────────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn ttl_missing_key_returns_minus_two() {
+    let port = common::spawn_server().await;
+    let (mut r, mut w) = common::connect(port).await;
+
+    w.write_all(b"TTL ghost\n").await.unwrap();
+    assert_eq!(common::read_reply(&mut r).await, common::integer(-2));
+}
+
+#[tokio::test]
+async fn ttl_key_without_expiry_returns_minus_one() {
+    let port = common::spawn_server().await;
+    let (mut r, mut w) = common::connect(port).await;
+
+    w.write_all(b"SET persistent value\n").await.unwrap();
+    common::read_reply(&mut r).await;
+
+    w.write_all(b"TTL persistent\n").await.unwrap();
+    assert_eq!(common::read_reply(&mut r).await, common::integer(-1));
+}
+
+#[tokio::test]
+async fn ttl_expired_key_returns_minus_two() {
+    let port = common::spawn_server().await;
+    let (mut r, mut w) = common::connect(port).await;
+
+    w.write_all(b"SET short value\n").await.unwrap();
+    common::read_reply(&mut r).await;
+
+    w.write_all(b"EXPIRE short 1\n").await.unwrap();
+    assert_eq!(common::read_reply(&mut r).await, common::integer(1));
+
+    tokio::time::sleep(Duration::from_millis(1200)).await;
+
+    w.write_all(b"TTL short\n").await.unwrap();
+    assert_eq!(common::read_reply(&mut r).await, common::integer(-2));
+}

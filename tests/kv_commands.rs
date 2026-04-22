@@ -1,5 +1,6 @@
 mod common;
 
+use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 
 // ── SET / GET ────────────────────────────────────────────────────────────────
@@ -175,4 +176,44 @@ async fn incr_on_numeric_string() {
 
     w.write_all(b"INCR n\n").await.unwrap();
     assert_eq!(common::read_reply(&mut r).await, common::integer(11));
+}
+
+// ── EXPIRE ───────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn expire_existing_key_returns_one() {
+    let port = common::spawn_server().await;
+    let (mut r, mut w) = common::connect(port).await;
+
+    w.write_all(b"SET session abc\n").await.unwrap();
+    common::read_reply(&mut r).await;
+
+    w.write_all(b"EXPIRE session 10\n").await.unwrap();
+    assert_eq!(common::read_reply(&mut r).await, common::integer(1));
+}
+
+#[tokio::test]
+async fn expire_missing_key_returns_zero() {
+    let port = common::spawn_server().await;
+    let (mut r, mut w) = common::connect(port).await;
+
+    w.write_all(b"EXPIRE ghost 10\n").await.unwrap();
+    assert_eq!(common::read_reply(&mut r).await, common::integer(0));
+}
+
+#[tokio::test]
+async fn expire_removes_key_after_timeout() {
+    let port = common::spawn_server().await;
+    let (mut r, mut w) = common::connect(port).await;
+
+    w.write_all(b"SET temp value\n").await.unwrap();
+    common::read_reply(&mut r).await;
+
+    w.write_all(b"EXPIRE temp 1\n").await.unwrap();
+    assert_eq!(common::read_reply(&mut r).await, common::integer(1));
+
+    tokio::time::sleep(Duration::from_millis(1200)).await;
+
+    w.write_all(b"GET temp\n").await.unwrap();
+    assert_eq!(common::read_reply(&mut r).await, common::nil());
 }

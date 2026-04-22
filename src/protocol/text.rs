@@ -29,6 +29,10 @@ pub fn parse_command(line: &str) -> Result<Command> {
         [cmd, key] if cmd == "EXISTS" => Ok(Command::Exists { key: key.clone() }),
         [cmd, key] if cmd == "INCR" => Ok(Command::Incr { key: key.clone() }),
         [cmd, key] if cmd == "DECR" => Ok(Command::Decr { key: key.clone() }),
+        [cmd, key, value] if cmd == "EXPIRE" => Ok(Command::Expire {
+            key: key.clone(),
+            seconds: value.parse::<u64>()?,
+        }),
 
         [cmd, ..] => bail!("unknown or wrong-arity command '{}'", cmd),
         [] => bail!("empty command"),

@@ -103,10 +103,79 @@ impl Store {
             },
         }
     }
+
+    /// Deletes expired entries
+    pub fn purge_expired(&self) {
+        let mut expired_keys = Vec::<String>::new();
+        self.data.iter().for_each(|item| {
+            if item.value().is_expired() {
+                expired_keys.push(item.key().clone());
+            }
+        });
+        for key in expired_keys {
+            self.del(&key);
+        }
+    }
 }
 
 impl Default for Store {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Store;
+    use std::{thread, time::Duration};
+
+    #[test]
+    fn purge_expired_removes_expired_keys() {
+        let store = Store::new();
+        store.set(
+            "temp".to_string(),
+            "v".to_string(),
+            Some(Duration::from_millis(20)),
+        );
+
+        thread::sleep(Duration::from_millis(40));
+        store.purge_expired();
+
+        assert_eq!(store.get("temp"), None);
+        assert!(!store.exists("temp"));
+    }
+
+    #[test]
+    fn purge_expired_keeps_non_expired_keys() {
+        let store = Store::new();
+        store.set("alive".to_string(), "v".to_string(), None);
+
+        store.purge_expired();
+
+        assert_eq!(store.get("alive"), Some("v".to_string()));
+        assert!(store.exists("alive"));
+    }
+
+    #[test]
+    fn purge_expired_removes_only_expired_keys() {
+        let store = Store::new();
+        store.set(
+            "expired".to_string(),
+            "a".to_string(),
+            Some(Duration::from_millis(20)),
+        );
+        store.set(
+            "long_lived".to_string(),
+            "b".to_string(),
+            Some(Duration::from_millis(500)),
+        );
+        store.set("persistent".to_string(), "c".to_string(), None);
+
+        thread::sleep(Duration::from_millis(50));
+        store.purge_expired();
+
+        assert_eq!(store.get("expired"), None);
+        assert_eq!(store.get("long_lived"), Some("b".to_string()));
+        assert_eq!(store.get("persistent"), Some("c".to_string()));
     }
 }

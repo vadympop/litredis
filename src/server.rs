@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Result;
 use tokio::net::TcpListener;
@@ -27,6 +28,7 @@ pub async fn run(config: Config) -> Result<()> {
     let listener = TcpListener::bind(&addr).await?;
     log::info!("listening on {}", listener.local_addr()?);
     let shared = Shared::create(config);
+    tokio::spawn(clean_expired_loop(shared.clone()));
     connections_loop(listener, shared).await
 }
 
@@ -41,5 +43,13 @@ pub async fn connections_loop(listener: TcpListener, shared: Arc<Shared>) -> Res
                 log::error!("connection error from {}: {}", peer, e);
             }
         });
+    }
+}
+
+async fn clean_expired_loop(shared: Arc<Shared>) {
+    let mut ticker = tokio::time::interval(Duration::from_millis(100));
+    loop {
+        ticker.tick().await;
+        shared.store.purge_expired();
     }
 }

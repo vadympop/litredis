@@ -18,5 +18,13 @@ pub fn execute(cmd: Command, shared: &Arc<Shared>) -> Reply {
         Command::Decr { key } => strings::decr(shared, key),
         Command::Expire { key, seconds } => ttl::expire(shared, &key, seconds),
         Command::Ttl { key } => ttl::ttl(shared, &key),
+        Command::Subscribe { channels: _ } => todo!(),
+        Command::Unsubscribe { channels: _ } => todo!(),
+        Command::Publish {
+            channel: _,
+            message: _,
+        } => todo!(),
+        Command::Quit => todo!(),
+        Command::Reset => todo!(),
     }
 }

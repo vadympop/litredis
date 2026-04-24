@@ -12,6 +12,12 @@ pub enum Command {
     Decr { key: String },
     Expire { key: String, seconds: u64 },
     Ttl { key: String },
+    // pub sub
+    Subscribe { channels: Vec<String> },
+    Unsubscribe { channels: Vec<String> },
+    Publish { channel: String, message: String },
+    Quit,
+    Reset,
 }
 
 #[derive(Debug)]

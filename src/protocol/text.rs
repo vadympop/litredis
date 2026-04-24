@@ -34,6 +34,23 @@ pub fn parse_command(line: &str) -> Result<Command> {
             seconds: value.parse::<u64>()?,
         }),
         [cmd, key] if cmd == "TTL" => Ok(Command::Ttl { key: key.clone() }),
+        [cmd, channels @ ..] if cmd == "SUBSCRIBE" && !channels.is_empty() => {
+            Ok(Command::Subscribe {
+                channels: channels.to_vec(),
+            })
+        }
+        [cmd] if cmd == "UNSUBSCRIBE" => Ok(Command::Unsubscribe {
+            channels: Vec::new(),
+        }),
+        [cmd, channels @ ..] if cmd == "UNSUBSCRIBE" => Ok(Command::Unsubscribe {
+            channels: channels.to_vec(),
+        }),
+        [cmd, channel, message] if cmd == "PUBLISH" => Ok(Command::Publish {
+            channel: channel.clone(),
+            message: message.clone(),
+        }),
+        [cmd] if cmd == "QUIT" => Ok(Command::Quit),
+        [cmd] if cmd == "RESET" => Ok(Command::Reset),
 
         [cmd, ..] => bail!("unknown or wrong-arity command '{}'", cmd),
         [] => bail!("empty command"),

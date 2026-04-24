@@ -171,4 +171,16 @@ mod tests {
             format!("$5{0}hello{0}", LINE_ENDING)
         );
     }
+
+    #[test]
+    fn encode_array_of_bulk_strings() {
+        assert_eq!(
+            encode_reply(&Reply::Array(vec![
+                Reply::Bulk("message".into()),
+                Reply::Bulk("news".into()),
+                Reply::Bulk("hello".into()),
+            ])),
+            format!("*3{0}$7{0}message{0}$4{0}news{0}$5{0}hello{0}", LINE_ENDING)
+        );
+    }
 }

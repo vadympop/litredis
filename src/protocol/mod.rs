@@ -20,5 +20,6 @@ pub enum Reply {
     Error(String),
     Integer(i64),
     Bulk(String),
+    Array(Vec<Reply>),
     Nil,
 }

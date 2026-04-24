@@ -46,6 +46,12 @@ pub fn encode_reply(reply: &Reply) -> String {
         Reply::Error(s) => format!("-ERR {}{}", s, LINE_ENDING),
         Reply::Integer(n) => format!(":{}{}", n, LINE_ENDING),
         Reply::Bulk(s) => format!("${}{}{}{1}", s.len(), LINE_ENDING, s),
+        Reply::Array(s) => format!(
+            "*{}{}{}",
+            s.len(),
+            LINE_ENDING,
+            s.iter().map(encode_reply).collect::<String>()
+        ),
         Reply::Nil => format!("$-1{}", LINE_ENDING),
     }
 }

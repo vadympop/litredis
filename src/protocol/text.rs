@@ -1,10 +1,7 @@
 use crate::protocol::{Command, Reply};
 use anyhow::{Result, bail};
 
-#[cfg(windows)]
 const LINE_ENDING: &str = "\r\n";
-#[cfg(not(windows))]
-const LINE_ENDING: &str = "\n";
 
 pub fn parse_command(line: &str) -> Result<Command> {
     let mut args = split_args(line.trim())?;

@@ -4,4 +4,5 @@ pub mod connection;
 pub mod protocol;
 pub mod pubsub;
 pub mod server;
+pub mod session;
 pub mod store;

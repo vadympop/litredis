@@ -1,4 +1,4 @@
-use crate::protocol::{Command, Reply};
+use crate::protocol::{Command, NormalCommand, Reply, SessionCommand};
 use anyhow::{Result, bail};
 
 const LINE_ENDING: &str = "\r\n";
@@ -13,41 +13,51 @@ pub fn parse_command(line: &str) -> Result<Command> {
     // Dont use values directly from slice-pattern because there are UPPER values,
     // but commands required original
     match args.as_slice() {
-        [cmd] if cmd == "PING" => Ok(Command::Ping(None)),
-        [cmd, key] if cmd == "PING" => Ok(Command::Ping(Some(key.clone()))),
-        [cmd, key] if cmd == "ECHO" => Ok(Command::Echo(key.clone())),
+        [cmd] if cmd == "PING" => Ok(Command::Normal(NormalCommand::Ping(None))),
+        [cmd, key] if cmd == "PING" => Ok(Command::Normal(NormalCommand::Ping(Some(key.clone())))),
+        [cmd, key] if cmd == "ECHO" => Ok(Command::Normal(NormalCommand::Echo(key.clone()))),
 
-        [cmd, key] if cmd == "GET" => Ok(Command::Get { key: key.clone() }),
-        [cmd, key, value] if cmd == "SET" => Ok(Command::Set {
+        [cmd, key] if cmd == "GET" => Ok(Command::Normal(NormalCommand::Get { key: key.clone() })),
+        [cmd, key, value] if cmd == "SET" => Ok(Command::Normal(NormalCommand::Set {
             key: key.clone(),
             value: value.clone(),
-        }),
-        [cmd, key] if cmd == "DEL" => Ok(Command::Del { key: key.clone() }),
-        [cmd, key] if cmd == "EXISTS" => Ok(Command::Exists { key: key.clone() }),
-        [cmd, key] if cmd == "INCR" => Ok(Command::Incr { key: key.clone() }),
-        [cmd, key] if cmd == "DECR" => Ok(Command::Decr { key: key.clone() }),
-        [cmd, key, value] if cmd == "EXPIRE" => Ok(Command::Expire {
+        })),
+        [cmd, key] if cmd == "DEL" => Ok(Command::Normal(NormalCommand::Del { key: key.clone() })),
+        [cmd, key] if cmd == "EXISTS" => {
+            Ok(Command::Normal(NormalCommand::Exists { key: key.clone() }))
+        }
+        [cmd, key] if cmd == "INCR" => {
+            Ok(Command::Normal(NormalCommand::Incr { key: key.clone() }))
+        }
+        [cmd, key] if cmd == "DECR" => {
+            Ok(Command::Normal(NormalCommand::Decr { key: key.clone() }))
+        }
+        [cmd, key, value] if cmd == "EXPIRE" => Ok(Command::Normal(NormalCommand::Expire {
             key: key.clone(),
             seconds: value.parse::<u64>()?,
-        }),
-        [cmd, key] if cmd == "TTL" => Ok(Command::Ttl { key: key.clone() }),
+        })),
+        [cmd, key] if cmd == "TTL" => Ok(Command::Normal(NormalCommand::Ttl { key: key.clone() })),
         [cmd, channels @ ..] if cmd == "SUBSCRIBE" && !channels.is_empty() => {
-            Ok(Command::Subscribe {
+            Ok(Command::Session(SessionCommand::Subscribe {
                 channels: channels.to_vec(),
-            })
+            }))
         }
-        [cmd] if cmd == "UNSUBSCRIBE" => Ok(Command::Unsubscribe {
+        [cmd] if cmd == "UNSUBSCRIBE" => Ok(Command::Session(SessionCommand::Unsubscribe {
             channels: Vec::new(),
-        }),
-        [cmd, channels @ ..] if cmd == "UNSUBSCRIBE" => Ok(Command::Unsubscribe {
-            channels: channels.to_vec(),
-        }),
-        [cmd, channel, message] if cmd == "PUBLISH" => Ok(Command::Publish {
-            channel: channel.clone(),
-            message: message.clone(),
-        }),
-        [cmd] if cmd == "QUIT" => Ok(Command::Quit),
-        [cmd] if cmd == "RESET" => Ok(Command::Reset),
+        })),
+        [cmd, channels @ ..] if cmd == "UNSUBSCRIBE" => {
+            Ok(Command::Session(SessionCommand::Unsubscribe {
+                channels: channels.to_vec(),
+            }))
+        }
+        [cmd, channel, message] if cmd == "PUBLISH" => {
+            Ok(Command::Normal(NormalCommand::Publish {
+                channel: channel.clone(),
+                message: message.clone(),
+            }))
+        }
+        [cmd] if cmd == "QUIT" => Ok(Command::Session(SessionCommand::Quit)),
+        [cmd] if cmd == "RESET" => Ok(Command::Session(SessionCommand::Reset)),
 
         [cmd, ..] => bail!("unknown or wrong-arity command '{}'", cmd),
         [] => bail!("empty command"),
@@ -146,20 +156,26 @@ mod tests {
 
     #[test]
     fn parse_ping_bare() {
-        assert!(matches!(parse_command("PING"), Ok(Command::Ping(None))));
+        assert!(matches!(
+            parse_command("PING"),
+            Ok(Command::Normal(NormalCommand::Ping(None)))
+        ));
     }
 
     #[test]
     fn parse_ping_msg() {
         assert!(matches!(
             parse_command("PING hello"),
-            Ok(Command::Ping(Some(_)))
+            Ok(Command::Normal(NormalCommand::Ping(Some(_))))
         ));
     }
 
     #[test]
     fn parse_echo() {
-        assert!(matches!(parse_command("ECHO hi"), Ok(Command::Echo(_))));
+        assert!(matches!(
+            parse_command("ECHO hi"),
+            Ok(Command::Normal(NormalCommand::Echo(_)))
+        ));
     }
 
     #[test]

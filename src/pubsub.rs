@@ -5,9 +5,10 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
 };
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::{Sender, UnboundedSender, error::TrySendError};
 
 pub type ClientId = u64;
+pub const PUBSUB_BUFFER_SIZE: usize = 1024;
 
 #[derive(Clone)]
 pub struct PubSubMessage {
@@ -17,7 +18,13 @@ pub struct PubSubMessage {
 
 pub struct PubSub {
     next_client_id: AtomicU64,
-    channels: Mutex<HashMap<String, HashMap<ClientId, UnboundedSender<PubSubMessage>>>>,
+    channels: Mutex<HashMap<String, HashMap<ClientId, Subscriber>>>,
+}
+
+#[derive(Clone)]
+pub struct Subscriber {
+    messages: Sender<PubSubMessage>,
+    disconnect: UnboundedSender<()>,
 }
 
 impl PubSub {
@@ -36,13 +43,17 @@ impl PubSub {
         &self,
         client_id: ClientId,
         channel: String,
-        sender: UnboundedSender<PubSubMessage>,
+        messages: Sender<PubSubMessage>,
+        disconnect: UnboundedSender<()>,
     ) {
         let mut channels = self.channels.lock().unwrap();
-        channels
-            .entry(channel)
-            .or_default()
-            .insert(client_id, sender);
+        channels.entry(channel).or_default().insert(
+            client_id,
+            Subscriber {
+                messages,
+                disconnect,
+            },
+        );
     }
 
     pub fn unsubscribe(&self, client_id: ClientId, channel: &str) {
@@ -70,7 +81,7 @@ impl PubSub {
             match channels.get(channel) {
                 Some(subs) => subs
                     .iter()
-                    .map(|(client_id, sender)| (*client_id, sender.clone()))
+                    .map(|(client_id, subscriber)| (*client_id, subscriber.clone()))
                     .collect::<Vec<_>>(),
                 None => return 0,
             }
@@ -81,23 +92,25 @@ impl PubSub {
             message,
         };
 
-        let mut count = 0;
-        let mut dead_clients = Vec::new();
+        let mut delivered = 0;
+        let mut disconnected_clients = Vec::new();
 
-        for (client_id, sender) in subscribers {
-            if sender.send(msg.clone()).is_ok() {
-                count += 1;
-            } else {
-                dead_clients.push(client_id);
+        for (client_id, subscriber) in subscribers {
+            match subscriber.messages.try_send(msg.clone()) {
+                Ok(()) => delivered += 1,
+                Err(TrySendError::Full(_)) => {
+                    let _ = subscriber.disconnect.send(());
+                    disconnected_clients.push(client_id);
+                }
+                Err(TrySendError::Closed(_)) => disconnected_clients.push(client_id),
             }
         }
 
-        // remove dead clients
-        if !dead_clients.is_empty() {
+        if !disconnected_clients.is_empty() {
             let mut channels = self.channels.lock().unwrap();
 
             if let Some(subs) = channels.get_mut(channel) {
-                for client_id in dead_clients {
+                for client_id in disconnected_clients {
                     subs.remove(&client_id);
                 }
 
@@ -107,12 +120,33 @@ impl PubSub {
             }
         }
 
-        count
+        delivered
     }
 }
 
 impl Default for PubSub {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::mpsc;
+
+    #[test]
+    fn publish_removes_subscriber_when_queue_is_full() {
+        let pubsub = PubSub::new();
+        let client_id = pubsub.next_client_id();
+        let (messages_tx, _messages_rx) = mpsc::channel(1);
+        let (disconnect_tx, mut disconnect_rx) = mpsc::unbounded_channel();
+
+        pubsub.subscribe(client_id, "news".into(), messages_tx, disconnect_tx);
+
+        assert_eq!(pubsub.publish("news", "one".into()), 1);
+        assert_eq!(pubsub.publish("news", "two".into()), 0);
+        assert!(disconnect_rx.try_recv().is_ok());
+        assert_eq!(pubsub.publish("news", "three".into()), 0);
     }
 }

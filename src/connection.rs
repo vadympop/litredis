@@ -13,7 +13,7 @@ pub async fn handle_connection(stream: TcpStream, shared: Arc<Shared>) -> Result
     let (reader, mut writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
     let mut read_buf = Vec::new();
-    let (mut session, mut pubsub_rx) = ClientSession::new(&shared);
+    let (mut session, mut pubsub_rx, mut slow_consumer_rx) = ClientSession::new(&shared);
 
     let result = loop {
         tokio::select! {
@@ -50,6 +50,7 @@ pub async fn handle_connection(stream: TcpStream, shared: Arc<Shared>) -> Result
                     break Err(e.into());
                 }
             }
+            Some(()) = slow_consumer_rx.recv() => break Ok(()),
         }
     };
 

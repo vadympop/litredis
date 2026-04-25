@@ -1,15 +1,16 @@
 use std::{collections::HashSet, sync::Arc};
 
-use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{self, Receiver, Sender, UnboundedReceiver, UnboundedSender};
 
 use crate::commands;
 use crate::protocol::{Command, NormalCommand, Reply, SessionCommand};
-use crate::pubsub::{ClientId, PubSubMessage};
+use crate::pubsub::{ClientId, PUBSUB_BUFFER_SIZE, PubSubMessage};
 use crate::server::Shared;
 
 pub struct ClientSession {
     client_id: ClientId,
-    pubsub_tx: UnboundedSender<PubSubMessage>,
+    pubsub_tx: Sender<PubSubMessage>,
+    slow_consumer_tx: UnboundedSender<()>,
     subscribed_channels: HashSet<String>,
 }
 
@@ -35,17 +36,20 @@ impl CommandOutcome {
 }
 
 impl ClientSession {
-    pub fn new(shared: &Arc<Shared>) -> (Self, UnboundedReceiver<PubSubMessage>) {
+    pub fn new(shared: &Arc<Shared>) -> (Self, Receiver<PubSubMessage>, UnboundedReceiver<()>) {
         let client_id = shared.pubsub.next_client_id();
-        let (pubsub_tx, pubsub_rx) = mpsc::unbounded_channel();
+        let (pubsub_tx, pubsub_rx) = mpsc::channel(PUBSUB_BUFFER_SIZE);
+        let (slow_consumer_tx, slow_consumer_rx) = mpsc::unbounded_channel();
 
         (
             Self {
                 client_id,
                 pubsub_tx,
+                slow_consumer_tx,
                 subscribed_channels: HashSet::new(),
             },
             pubsub_rx,
+            slow_consumer_rx,
         )
     }
 
@@ -115,9 +119,12 @@ impl ClientSession {
 
     fn subscribe(&mut self, channel: String, shared: &Arc<Shared>) -> Reply {
         self.subscribed_channels.insert(channel.clone());
-        shared
-            .pubsub
-            .subscribe(self.client_id, channel.clone(), self.pubsub_tx.clone());
+        shared.pubsub.subscribe(
+            self.client_id,
+            channel.clone(),
+            self.pubsub_tx.clone(),
+            self.slow_consumer_tx.clone(),
+        );
 
         subscribe_reply(channel, self.subscribed_channels.len())
     }

@@ -18,13 +18,15 @@ pub fn execute(cmd: Command, shared: &Arc<Shared>) -> Reply {
         Command::Decr { key } => strings::decr(shared, key),
         Command::Expire { key, seconds } => ttl::expire(shared, &key, seconds),
         Command::Ttl { key } => ttl::ttl(shared, &key),
-        Command::Subscribe { channels: _ } => todo!(),
-        Command::Unsubscribe { channels: _ } => todo!(),
-        Command::Publish {
-            channel: _,
-            message: _,
-        } => todo!(),
-        Command::Quit => todo!(),
-        Command::Reset => todo!(),
+        Command::Publish { channel, message } => {
+            let delivered = shared.pubsub.publish(&channel, message);
+            Reply::Integer(delivered as i64)
+        }
+        Command::Subscribe { .. } | Command::Unsubscribe { .. } => {
+            Reply::Error("subscription commands must be handled by the connection".into())
+        }
+        Command::Quit | Command::Reset => {
+            Reply::Error("connection commands must be handled by the connection".into())
+        }
     }
 }

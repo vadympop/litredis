@@ -1,5 +1,11 @@
-use std::{collections::HashMap, sync::atomic::AtomicU64};
-use tokio::sync::{Mutex, mpsc::UnboundedSender};
+use std::{
+    collections::HashMap,
+    sync::{
+        Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
+};
+use tokio::sync::mpsc::UnboundedSender;
 
 pub type ClientId = u64;
 
@@ -23,25 +29,24 @@ impl PubSub {
     }
 
     pub fn next_client_id(&self) -> ClientId {
-        self.next_client_id
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        self.next_client_id.fetch_add(1, Ordering::Relaxed)
     }
 
-    pub async fn subscribe(
+    pub fn subscribe(
         &self,
         client_id: ClientId,
         channel: String,
         sender: UnboundedSender<PubSubMessage>,
     ) {
-        let mut channels = self.channels.lock().await;
+        let mut channels = self.channels.lock().unwrap();
         channels
             .entry(channel)
             .or_default()
             .insert(client_id, sender);
     }
 
-    pub async fn unsubscribe(&self, client_id: ClientId, channel: &str) {
-        let mut channels = self.channels.lock().await;
+    pub fn unsubscribe(&self, client_id: ClientId, channel: &str) {
+        let mut channels = self.channels.lock().unwrap();
         if let Some(subs) = channels.get_mut(channel) {
             subs.remove(&client_id);
             if subs.is_empty() {
@@ -50,17 +55,17 @@ impl PubSub {
         };
     }
 
-    pub async fn unsubscribe_all(&self, client_id: ClientId) {
-        let mut channels = self.channels.lock().await;
+    pub fn unsubscribe_all(&self, client_id: ClientId) {
+        let mut channels = self.channels.lock().unwrap();
         channels.retain(|_, subs| {
             subs.remove(&client_id);
             !subs.is_empty()
         });
     }
 
-    pub async fn publish(&self, channel: &str, message: String) -> usize {
+    pub fn publish(&self, channel: &str, message: String) -> usize {
         let subscribers = {
-            let channels = self.channels.lock().await;
+            let channels = self.channels.lock().unwrap();
 
             match channels.get(channel) {
                 Some(subs) => subs
@@ -89,7 +94,7 @@ impl PubSub {
 
         // remove dead clients
         if !dead_clients.is_empty() {
-            let mut channels = self.channels.lock().await;
+            let mut channels = self.channels.lock().unwrap();
 
             if let Some(subs) = channels.get_mut(channel) {
                 for client_id in dead_clients {

@@ -17,6 +17,10 @@ pub async fn handle_connection(stream: TcpStream, shared: Arc<Shared>) -> Result
 
     let result = loop {
         tokio::select! {
+            biased;
+
+            Some(()) = slow_consumer_rx.recv() => break Ok(()),
+
             read = reader.read_until(b'\n', &mut read_buf) => {
                 let n = match read {
                     Ok(n) => n,
@@ -50,7 +54,6 @@ pub async fn handle_connection(stream: TcpStream, shared: Arc<Shared>) -> Result
                     break Err(e.into());
                 }
             }
-            Some(()) = slow_consumer_rx.recv() => break Ok(()),
         }
     };
 

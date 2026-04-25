@@ -15,12 +15,16 @@ pub async fn handle_connection(stream: TcpStream, shared: Arc<Shared>) -> Result
     let mut read_buf = Vec::new();
     let (mut session, mut pubsub_rx) = ClientSession::new(&shared);
 
-    loop {
+    let result = loop {
         tokio::select! {
             read = reader.read_until(b'\n', &mut read_buf) => {
-                let n = read?;
+                let n = match read {
+                    Ok(n) => n,
+                    Err(e) => break Err(e.into()),
+                };
+
                 if n == 0 {
-                    break; // client disconnected
+                    break Ok(()); // client disconnected
                 }
 
                 let outcome = match parse_line(&read_buf) {
@@ -29,24 +33,29 @@ pub async fn handle_connection(stream: TcpStream, shared: Arc<Shared>) -> Result
                 };
 
                 let response = encode_replies(&outcome.replies);
-                writer.write_all(response.as_bytes()).await?;
+                if let Err(e) = writer.write_all(response.as_bytes()).await {
+                    break Err(e.into());
+                }
+
                 read_buf.clear();
 
                 if outcome.close_connection {
-                    break;
+                    break Ok(());
                 }
             }
             Some(message) = pubsub_rx.recv() => {
                 let reply = ClientSession::pubsub_message_reply(message);
 
-                writer.write_all(encode_reply(&reply).as_bytes()).await?;
+                if let Err(e) = writer.write_all(encode_reply(&reply).as_bytes()).await {
+                    break Err(e.into());
+                }
             }
         }
-    }
+    };
 
     session.cleanup(&shared);
 
-    Ok(())
+    result
 }
 
 fn parse_line(read_buf: &[u8]) -> Result<Command, Reply> {

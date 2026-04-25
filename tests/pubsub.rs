@@ -105,3 +105,28 @@ async fn subscribed_mode_rejects_kv_commands_until_unsubscribed() {
     w.write_all(b"GET key\n").await.unwrap();
     assert_eq!(common::read_reply(&mut r).await, common::bulk("value"));
 }
+
+#[tokio::test]
+async fn pubsub_message_does_not_drop_partial_client_command() {
+    let port = common::spawn_server().await;
+    let (mut sub_r, mut sub_w) = common::connect(port).await;
+    let (mut pub_r, mut pub_w) = common::connect(port).await;
+
+    sub_w.write_all(b"SUBSCRIBE news\n").await.unwrap();
+    assert_eq!(read_lines(&mut sub_r, 6).await, array_subscribe("news", 1));
+
+    sub_w.write_all(b"PIN").await.unwrap();
+
+    pub_w.write_all(b"PUBLISH news hello\n").await.unwrap();
+    assert_eq!(common::read_reply(&mut pub_r).await, common::integer(1));
+    assert_eq!(
+        read_lines(&mut sub_r, 7).await,
+        array_message("news", "hello")
+    );
+
+    sub_w.write_all(b"G hi\n").await.unwrap();
+    assert_eq!(
+        read_lines(&mut sub_r, 5).await,
+        format!("*2{0}$4{0}pong{0}$2{0}hi{0}", common::LINE_ENDING)
+    );
+}

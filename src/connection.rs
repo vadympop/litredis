@@ -23,8 +23,6 @@ pub async fn handle_connection(stream: TcpStream, shared: Arc<Shared>) -> Result
     let mut read_buf = Vec::new();
 
     loop {
-        read_buf.clear();
-
         tokio::select! {
             read = reader.read_until(b'\n', &mut read_buf) => {
                 let n = read?;
@@ -117,6 +115,7 @@ pub async fn handle_connection(stream: TcpStream, shared: Arc<Shared>) -> Result
 
                 let response = replies.iter().map(encode_reply).collect::<String>();
                 writer.write_all(response.as_bytes()).await?;
+                read_buf.clear();
 
                 if close_after_reply {
                     break;

@@ -6,11 +6,13 @@ use tokio::net::TcpListener;
 
 use crate::config::Config;
 use crate::connection::handle_connection;
+use crate::pubsub::PubSub;
 use crate::store::Store;
 
 pub struct Shared {
     pub config: Config,
     pub store: Store,
+    pub pubsub: PubSub,
 }
 
 impl Shared {
@@ -18,6 +20,7 @@ impl Shared {
         Arc::new(Shared {
             config,
             store: Store::new(),
+            pubsub: PubSub::new(),
         })
     }
 }

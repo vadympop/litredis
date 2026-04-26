@@ -11,10 +11,7 @@ use tokio::{
     net::{TcpListener, TcpStream},
 };
 
-#[cfg(windows)]
 pub const LINE_ENDING: &str = "\r\n";
-#[cfg(not(windows))]
-pub const LINE_ENDING: &str = "\n";
 
 // ── Reply builders (mirror encode_reply so tests stay in sync with the protocol) ──
 

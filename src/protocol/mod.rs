@@ -2,6 +2,12 @@ pub mod text;
 
 #[derive(Debug)]
 pub enum Command {
+    Normal(NormalCommand),
+    Session(SessionCommand),
+}
+
+#[derive(Debug)]
+pub enum NormalCommand {
     Ping(Option<String>),
     Echo(String),
     Get { key: String },
@@ -12,6 +18,15 @@ pub enum Command {
     Decr { key: String },
     Expire { key: String, seconds: u64 },
     Ttl { key: String },
+    Publish { channel: String, message: String },
+}
+
+#[derive(Debug)]
+pub enum SessionCommand {
+    Subscribe { channels: Vec<String> },
+    Unsubscribe { channels: Vec<String> },
+    Quit,
+    Reset,
 }
 
 #[derive(Debug)]
@@ -20,5 +35,6 @@ pub enum Reply {
     Error(String),
     Integer(i64),
     Bulk(String),
+    Array(Vec<Reply>),
     Nil,
 }

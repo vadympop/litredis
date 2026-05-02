@@ -41,7 +41,8 @@ struct PartialConfig {
 pub struct Config {
     pub port: u16,
     pub host: String,
-    pub snapshot_path: PathBuf,
+    /// None disables persistence entirely
+    pub snapshot_path: Option<String>,
     pub flush_interval: u64,
     pub password: Option<String>,
 }
@@ -51,7 +52,7 @@ impl Default for Config {
         Config {
             port: 9736,
             host: "0.0.0.0".into(),
-            snapshot_path: PathBuf::from("dump.json"),
+            snapshot_path: Some("dump.json".into()),
             flush_interval: 300,
             password: None,
         }

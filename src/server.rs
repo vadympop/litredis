@@ -43,11 +43,10 @@ pub async fn run(config: Config) -> Result<()> {
     tokio::select! {
         result = connections_loop(listener, shared.clone()) => result,
         _ = signal::ctrl_c() => {
-            if let Some(path) = &shared.config.snapshot_path {
-                if let Err(e) = persistence::save(&shared.store, path) {
+            if let Some(path) = &shared.config.snapshot_path
+                && let Err(e) = persistence::save(&shared.store, path) {
                     log::error!("shutdown snapshot flush failed: {e}");
                 }
-            }
             Ok(())
         }
     }
@@ -79,10 +78,10 @@ async fn save_snapshots_loop(shared: Arc<Shared>) {
     let mut ticker = tokio::time::interval(Duration::from_secs(shared.config.flush_interval));
     loop {
         ticker.tick().await;
-        if let Some(path) = &shared.config.snapshot_path {
-            if let Err(e) = persistence::save(&shared.store, path) {
-                log::error!("periodic snapshot flush failed: {e}");
-            }
+        if let Some(path) = &shared.config.snapshot_path
+            && let Err(e) = persistence::save(&shared.store, path)
+        {
+            log::error!("periodic snapshot flush failed: {e}");
         }
     }
 }

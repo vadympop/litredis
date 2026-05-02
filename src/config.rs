@@ -91,7 +91,10 @@ fn build_config(cli: PartialConfig, file: PartialConfig) -> Result<Config> {
     if is_persistence_disabled {
         config.snapshot_path = None;
     }
-    anyhow::ensure!(config.flush_interval >= 1, "flush_interval must be at least 1 second");
+    anyhow::ensure!(
+        config.flush_interval >= 1,
+        "flush_interval must be at least 1 second"
+    );
 
     Ok(config)
 }

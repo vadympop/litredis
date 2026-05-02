@@ -51,18 +51,26 @@ pub fn load(path: &str) -> Store {
     let now_unix = now_secs();
     let now_instant = Instant::now();
 
-    let entries = parsed_data.entries.into_iter().filter_map(|e| {
-        let expires_at = match e.expires_at {
-            Some(x) if x <= now_unix => return None,
-            Some(x) => Some(now_instant + Duration::from_secs(x - now_unix)),
-            None => None,
-        };
-        let value = match e.value {
-            PersistedValue::Str(x) => EntryValue::Str(x),
-            PersistedValue::Int(x) => EntryValue::Int(x),
-        };
-        Some(SnapshotEntry { key: e.key, value, expires_at })
-    }).collect();
+    let entries = parsed_data
+        .entries
+        .into_iter()
+        .filter_map(|e| {
+            let expires_at = match e.expires_at {
+                Some(x) if x <= now_unix => return None,
+                Some(x) => Some(now_instant + Duration::from_secs(x - now_unix)),
+                None => None,
+            };
+            let value = match e.value {
+                PersistedValue::Str(x) => EntryValue::Str(x),
+                PersistedValue::Int(x) => EntryValue::Int(x),
+            };
+            Some(SnapshotEntry {
+                key: e.key,
+                value,
+                expires_at,
+            })
+        })
+        .collect();
 
     Store::from_snapshot(entries)
 }
@@ -83,7 +91,11 @@ pub fn save(store: &Store, path: &str) -> anyhow::Result<()> {
                 let remaining = t.saturating_duration_since(now_instant);
                 now_unix + remaining.as_secs()
             });
-            PersistenceDataNode { key: x.key, value, expires_at }
+            PersistenceDataNode {
+                key: x.key,
+                value,
+                expires_at,
+            }
         })
         .collect();
 

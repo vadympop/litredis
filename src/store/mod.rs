@@ -7,7 +7,7 @@ use dashmap::DashMap;
 
 use entry::{EntryValue, StoreEntry};
 
-pub type InternalStore = DashMap<String,  StoreEntry>;
+pub type InternalStore = DashMap<String, StoreEntry>;
 
 pub struct Store {
     data: InternalStore,
@@ -23,11 +23,11 @@ impl Store {
     pub fn with_data(data: InternalStore) -> Self {
         Store { data }
     }
-    
+
     pub fn get_raw_data(&self) -> InternalStore {
         self.data.clone()
     }
- 
+
     /// Returns `None` if the key is missing or expired.
     pub fn get(&self, key: &str) -> Option<String> {
         match self.data.get(key) {

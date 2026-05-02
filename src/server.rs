@@ -1,14 +1,14 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Result;
-use tokio::net::TcpListener;
-use tokio::signal;
 use crate::config::Config;
 use crate::connection::handle_connection;
 use crate::persistence;
 use crate::pubsub::PubSub;
 use crate::store::Store;
+use anyhow::Result;
+use tokio::net::TcpListener;
+use tokio::signal;
 
 pub struct Shared {
     pub config: Config,
@@ -20,7 +20,7 @@ impl Shared {
     pub fn create(config: Config) -> Arc<Shared> {
         let store = match &config.snapshot_path {
             Some(path) => persistence::load(path),
-            None => Store::new()
+            None => Store::new(),
         };
 
         Arc::new(Shared {

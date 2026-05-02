@@ -1,9 +1,9 @@
 pub mod commands;
 pub mod config;
 pub mod connection;
+pub mod persistence;
 pub mod protocol;
 pub mod pubsub;
 pub mod server;
 pub mod session;
 pub mod store;
-pub mod persistence;

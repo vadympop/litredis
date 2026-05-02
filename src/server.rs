@@ -18,9 +18,14 @@ pub struct Shared {
 
 impl Shared {
     pub fn create(config: Config) -> Arc<Shared> {
+        let store = match &config.snapshot_path {
+            Some(path) => persistence::load(path),
+            None => Store::new()
+        };
+
         Arc::new(Shared {
             config,
-            store: Store::new(),
+            store,
             pubsub: PubSub::new(),
         })
     }

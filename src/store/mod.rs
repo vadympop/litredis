@@ -1,4 +1,4 @@
-pub mod entry;
+pub(crate) mod entry;
 
 use std::time::{Duration, Instant};
 
@@ -7,7 +7,13 @@ use dashmap::DashMap;
 
 use entry::{EntryValue, StoreEntry};
 
-pub type InternalStore = DashMap<String, StoreEntry>;
+type InternalStore = DashMap<String, StoreEntry>;
+
+pub struct SnapshotEntry {
+    pub key: String,
+    pub value: EntryValue,
+    pub expires_at: Option<Instant>,
+}
 
 pub struct Store {
     data: InternalStore,
@@ -16,16 +22,32 @@ pub struct Store {
 impl Store {
     pub fn new() -> Self {
         Store {
-            data: DashMap::new(),
+            data: InternalStore::new(),
         }
     }
 
-    pub fn with_data(data: InternalStore) -> Self {
+    pub fn from_snapshot(entries: Vec<SnapshotEntry>) -> Self {
+        let data = InternalStore::new();
+        for e in entries {
+            let entry = match e.value {
+                EntryValue::Str(s) => StoreEntry::str(s, e.expires_at),
+                EntryValue::Int(n) => StoreEntry::int(n, e.expires_at),
+            };
+            data.insert(e.key, entry);
+        }
         Store { data }
     }
 
-    pub fn get_raw_data(&self) -> InternalStore {
-        self.data.clone()
+    pub fn to_snapshot_entries(&self) -> Vec<SnapshotEntry> {
+        self.data
+            .iter()
+            .filter(|r| !r.is_expired())
+            .map(|r| SnapshotEntry {
+                key: r.key().clone(),
+                value: r.value().value.clone(),
+                expires_at: r.value().expires_at,
+            })
+            .collect()
     }
 
     /// Returns `None` if the key is missing or expired.

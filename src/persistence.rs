@@ -1,9 +1,10 @@
-use crate::store::entry::{EntryValue, StoreEntry};
-use crate::store::{InternalStore, Store};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+use crate::store::entry::EntryValue;
+use crate::store::{SnapshotEntry, Store};
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -40,7 +41,6 @@ fn tmp_path(base: &str) -> String {
 }
 
 pub fn load(path: &str) -> Store {
-    let internal_store = InternalStore::new();
     let Ok(file_content) = fs::read_to_string(path) else {
         return Store::new();
     };
@@ -51,21 +51,20 @@ pub fn load(path: &str) -> Store {
     let now_unix = now_secs();
     let now_instant = Instant::now();
 
-    for entry in parsed_data.entries {
-        let expires_at = match entry.expires_at {
-            Some(x) if x <= now_unix => continue,
+    let entries = parsed_data.entries.into_iter().filter_map(|e| {
+        let expires_at = match e.expires_at {
+            Some(x) if x <= now_unix => return None,
             Some(x) => Some(now_instant + Duration::from_secs(x - now_unix)),
             None => None,
         };
-        let to_insert = match entry.value {
-            PersistedValue::Str(x) => StoreEntry::str(x, expires_at),
-            PersistedValue::Int(x) => StoreEntry::int(x, expires_at),
+        let value = match e.value {
+            PersistedValue::Str(x) => EntryValue::Str(x),
+            PersistedValue::Int(x) => EntryValue::Int(x),
         };
+        Some(SnapshotEntry { key: e.key, value, expires_at })
+    }).collect();
 
-        internal_store.insert(entry.key, to_insert);
-    }
-
-    Store::with_data(internal_store)
+    Store::from_snapshot(entries)
 }
 
 pub fn save(store: &Store, path: &str) -> anyhow::Result<()> {
@@ -73,23 +72,18 @@ pub fn save(store: &Store, path: &str) -> anyhow::Result<()> {
     let now_instant = Instant::now();
 
     let entries: Vec<PersistenceDataNode> = store
-        .get_raw_data()
-        .iter()
-        .filter(|x| !x.is_expired())
+        .to_snapshot_entries()
+        .into_iter()
         .map(|x| {
-            let value = match &x.value {
-                EntryValue::Str(x) => PersistedValue::Str(x.clone()),
-                EntryValue::Int(x) => PersistedValue::Int(*x),
+            let value = match x.value {
+                EntryValue::Str(s) => PersistedValue::Str(s),
+                EntryValue::Int(n) => PersistedValue::Int(n),
             };
             let expires_at = x.expires_at.map(|t| {
                 let remaining = t.saturating_duration_since(now_instant);
                 now_unix + remaining.as_secs()
             });
-            PersistenceDataNode {
-                key: x.key().clone(),
-                value,
-                expires_at,
-            }
+            PersistenceDataNode { key: x.key, value, expires_at }
         })
         .collect();
 

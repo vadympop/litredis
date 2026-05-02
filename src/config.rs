@@ -22,7 +22,7 @@ struct PartialConfig {
     #[arg(long)]
     snapshot_path: Option<PathBuf>,
 
-    /// Milliseconds between periodic background snapshots
+    /// Seconds between periodic background snapshots
     #[arg(long)]
     flush_interval: Option<u64>,
 

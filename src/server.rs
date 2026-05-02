@@ -76,7 +76,7 @@ async fn clean_expired_loop(shared: Arc<Shared>) {
 }
 
 async fn save_snapshots_loop(shared: Arc<Shared>) {
-    let mut ticker = tokio::time::interval(Duration::from_millis(shared.config.flush_interval));
+    let mut ticker = tokio::time::interval(Duration::from_secs(shared.config.flush_interval));
     loop {
         ticker.tick().await;
         if let Some(path) = &shared.config.snapshot_path {

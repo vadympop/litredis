@@ -92,3 +92,82 @@ pub fn save(store: &Store, path: &str) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::Duration;
+
+    static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    fn tmp() -> String {
+        let n = TEST_COUNTER.fetch_add(1, Ordering::Relaxed);
+        format!(
+            "{}/persist_unit_{}_{n}.json",
+            std::env::temp_dir().display(),
+            std::process::id()
+        )
+    }
+
+    #[test]
+    fn missing_file_returns_empty_store() {
+        let store = load("/no/such/file/dump.json");
+        assert_eq!(store.get("k"), None);
+    }
+
+    #[test]
+    fn corrupt_file_returns_empty_store() {
+        let p = tmp();
+        fs::write(&p, b"not json").unwrap();
+        let store = load(&p);
+        assert_eq!(store.get("k"), None);
+        fs::remove_file(&p).ok();
+    }
+
+    #[test]
+    fn roundtrip_str() {
+        let p = tmp();
+        let store = Store::new();
+        store.set("hello".into(), "world".into(), None);
+        save(&store, &p).unwrap();
+        let loaded = load(&p);
+        assert_eq!(loaded.get("hello"), Some("world".into()));
+        fs::remove_file(&p).ok();
+    }
+
+    #[test]
+    fn roundtrip_int() {
+        let p = tmp();
+        let store = Store::new();
+        store.incrby("n", 99).unwrap();
+        save(&store, &p).unwrap();
+        let loaded = load(&p);
+        assert_eq!(loaded.get("n"), Some("99".into()));
+        fs::remove_file(&p).ok();
+    }
+
+    #[test]
+    fn expired_entry_discarded_on_load() {
+        let p = tmp();
+        let store = Store::new();
+        store.set("x".into(), "y".into(), Some(Duration::from_millis(50)));
+        save(&store, &p).unwrap();
+        std::thread::sleep(Duration::from_millis(100));
+        let loaded = load(&p);
+        assert_eq!(loaded.get("x"), None);
+        fs::remove_file(&p).ok();
+    }
+
+    #[test]
+    fn ttl_approximately_preserved() {
+        let p = tmp();
+        let store = Store::new();
+        store.set("k".into(), "v".into(), Some(Duration::from_secs(30)));
+        save(&store, &p).unwrap();
+        let loaded = load(&p);
+        let ttl = loaded.ttl("k");
+        assert!(ttl > 25 && ttl <= 30, "expected TTL ~30s, got {ttl}");
+        fs::remove_file(&p).ok();
+    }
+}

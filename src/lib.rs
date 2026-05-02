@@ -6,4 +6,4 @@ pub mod pubsub;
 pub mod server;
 pub mod session;
 pub mod store;
-mod persistence;
+pub mod persistence;

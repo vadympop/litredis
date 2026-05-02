@@ -30,6 +30,11 @@ struct PartialConfig {
     #[arg(long)]
     password: Option<String>,
 
+    /// Disable persistence entirely (overrides snapshot_path)
+    #[arg(long)]
+    #[serde(default)]
+    no_persistence: bool,
+
     /// Path to JSON config file
     #[arg(long, value_name = "FILE")]
     #[serde(skip)]
@@ -76,10 +81,18 @@ impl Config {
 
 /// Merge order: defaults -> file -> CLI
 fn build_config(cli: PartialConfig, file: PartialConfig) -> Result<Config> {
+    let is_persistence_disabled = cli.no_persistence || file.no_persistence;
+
     let mut merged = serde_json::to_value(Config::default())?;
     json_merge(&mut merged, serde_json::to_value(&file)?);
     json_merge(&mut merged, serde_json::to_value(&cli)?);
-    Ok(serde_json::from_value(merged)?)
+
+    let mut config: Config = serde_json::from_value(merged)?;
+    if is_persistence_disabled {
+        config.snapshot_path = None;
+    }
+
+    Ok(config)
 }
 
 /// Recursively overlay `over` onto `base`, skipping null values in `over`

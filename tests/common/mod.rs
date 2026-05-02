@@ -43,7 +43,7 @@ pub async fn spawn_server() -> u16 {
     let config = Config {
         port,
         host: "127.0.0.1".into(),
-        snapshot_path: PathBuf::from("dump.json"),
+        snapshot_path: Some("dump.json".into()),
         flush_interval: 300,
         password: None,
     };

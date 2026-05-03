@@ -22,13 +22,18 @@ struct PartialConfig {
     #[arg(long)]
     snapshot_path: Option<PathBuf>,
 
-    /// Milliseconds between periodic background snapshots
+    /// Seconds between periodic background snapshots
     #[arg(long)]
     flush_interval: Option<u64>,
 
     /// Require clients to authenticate with this password
     #[arg(long)]
     password: Option<String>,
+
+    /// Disable persistence entirely (overrides snapshot_path)
+    #[arg(long)]
+    #[serde(default)]
+    no_persistence: bool,
 
     /// Path to JSON config file
     #[arg(long, value_name = "FILE")]
@@ -41,7 +46,8 @@ struct PartialConfig {
 pub struct Config {
     pub port: u16,
     pub host: String,
-    pub snapshot_path: PathBuf,
+    /// None disables persistence entirely
+    pub snapshot_path: Option<String>,
     pub flush_interval: u64,
     pub password: Option<String>,
 }
@@ -51,7 +57,7 @@ impl Default for Config {
         Config {
             port: 9736,
             host: "0.0.0.0".into(),
-            snapshot_path: PathBuf::from("dump.json"),
+            snapshot_path: Some("dump.json".into()),
             flush_interval: 300,
             password: None,
         }
@@ -75,10 +81,22 @@ impl Config {
 
 /// Merge order: defaults -> file -> CLI
 fn build_config(cli: PartialConfig, file: PartialConfig) -> Result<Config> {
+    let is_persistence_disabled = cli.no_persistence || file.no_persistence;
+
     let mut merged = serde_json::to_value(Config::default())?;
     json_merge(&mut merged, serde_json::to_value(&file)?);
     json_merge(&mut merged, serde_json::to_value(&cli)?);
-    Ok(serde_json::from_value(merged)?)
+
+    let mut config: Config = serde_json::from_value(merged)?;
+    if is_persistence_disabled {
+        config.snapshot_path = None;
+    }
+    anyhow::ensure!(
+        config.flush_interval >= 1,
+        "flush_interval must be at least 1 second"
+    );
+
+    Ok(config)
 }
 
 /// Recursively overlay `over` onto `base`, skipping null values in `over`

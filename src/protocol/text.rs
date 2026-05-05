@@ -1,12 +1,12 @@
+use crate::protocol::error::ProtocolError;
 use crate::protocol::{Command, NormalCommand, Reply, SessionCommand};
-use anyhow::{Result, bail};
 
 const LINE_ENDING: &str = "\r\n";
 
-pub fn parse_command(line: &str) -> Result<Command> {
+pub fn parse_command(line: &str) -> Result<Command, ProtocolError> {
     let mut args = split_args(line.trim())?;
     if args.is_empty() {
-        bail!("empty command");
+        return Err(ProtocolError::EmptyCommand);
     }
     args[0].make_ascii_uppercase();
 
@@ -34,7 +34,9 @@ pub fn parse_command(line: &str) -> Result<Command> {
         }
         [cmd, key, value] if cmd == "EXPIRE" => Ok(Command::Normal(NormalCommand::Expire {
             key: key.clone(),
-            seconds: value.parse::<u64>()?,
+            seconds: value
+                .parse::<u64>()
+                .map_err(|e| ProtocolError::InvalidArgument(e.to_string()))?,
         })),
         [cmd, key] if cmd == "TTL" => Ok(Command::Normal(NormalCommand::Ttl { key: key.clone() })),
         [cmd, channels @ ..] if cmd == "SUBSCRIBE" && !channels.is_empty() => {
@@ -59,8 +61,8 @@ pub fn parse_command(line: &str) -> Result<Command> {
         [cmd] if cmd == "QUIT" => Ok(Command::Session(SessionCommand::Quit)),
         [cmd] if cmd == "RESET" => Ok(Command::Session(SessionCommand::Reset)),
 
-        [cmd, ..] => bail!("unknown or wrong-arity command '{}'", cmd),
-        [] => bail!("empty command"),
+        [cmd, ..] => Err(ProtocolError::UnknownCommand(cmd.clone())),
+        [] => Err(ProtocolError::EmptyCommand),
     }
 }
 
@@ -82,7 +84,7 @@ pub fn encode_reply(reply: &Reply) -> String {
 
 /// Splits a command line into tokens, respecting double-quoted strings.
 /// `ECHO "hello world"` → ["ECHO", "hello world"]
-fn split_args(input: &str) -> Result<Vec<String>> {
+fn split_args(input: &str) -> Result<Vec<String>, ProtocolError> {
     let mut args = Vec::new();
     let mut chars = input.chars().peekable();
 
@@ -104,7 +106,7 @@ fn split_args(input: &str) -> Result<Vec<String>> {
                         }
                     }
                     Some(ch) => buf.push(ch),
-                    None => bail!("unterminated quoted string"),
+                    None => return Err(ProtocolError::UnterminatedString),
                 }
             }
             args.push(buf);

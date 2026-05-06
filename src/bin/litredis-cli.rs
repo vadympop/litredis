@@ -45,11 +45,15 @@ async fn main() -> io::Result<()> {
 
     write_half.shutdown().await?;
 
+    // abort reader task so we do not hang on idle server
+    reader_task.abort();
+
     // treat connection close as a clean exit
     match reader_task.await {
         Ok(Ok(())) => Ok(()),
         Ok(Err(e)) if e.kind() == io::ErrorKind::UnexpectedEof => Ok(()),
         Ok(Err(e)) => Err(e),
+        Err(e) if e.is_cancelled() => Ok(()),
         Err(e) => Err(io::Error::other(e)),
     }
 }

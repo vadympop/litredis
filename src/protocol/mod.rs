@@ -5,6 +5,7 @@ pub mod text;
 pub enum Command {
     Normal(NormalCommand),
     Session(SessionCommand),
+    Auth { password: String },
 }
 
 #[derive(Debug)]

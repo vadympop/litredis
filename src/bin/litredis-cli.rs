@@ -15,6 +15,8 @@ struct Args {
     port: u16,
 }
 
+const MAX_ARRAY_LEN: usize = 1_000_000;
+
 #[tokio::main]
 async fn main() -> io::Result<()> {
     // parse args and open tcp connection
@@ -122,11 +124,17 @@ where
             b'*' => {
                 // track nested array sizes
                 let count = parse_i64(&line[1..])?;
+                let count = checked_array_len(count)?;
                 if !remaining.is_empty() {
                     consume_item(&mut remaining);
                 }
-                if count > 0 {
-                    remaining.push(count);
+                if let Some(count) = count {
+                    if count > 0 {
+                        let count = i64::try_from(count).map_err(|_| {
+                            io::Error::new(io::ErrorKind::InvalidData, "array length overflow")
+                        })?;
+                        remaining.push(count);
+                    }
                 }
             }
             _ => {
@@ -165,6 +173,25 @@ fn parse_i64(bytes: &[u8]) -> io::Result<i64> {
     trimmed
         .parse::<i64>()
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid length"))
+}
+
+fn checked_array_len(count: i64) -> io::Result<Option<usize>> {
+    // validate and cap array length
+    if count == -1 {
+        return Ok(None);
+    }
+    if count < -1 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "invalid array length",
+        ));
+    }
+    let count = usize::try_from(count)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "array length overflow"))?;
+    if count > MAX_ARRAY_LEN {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "array too large"));
+    }
+    Ok(Some(count))
 }
 
 fn parse_resp_frame(bytes: &[u8]) -> io::Result<Reply> {
@@ -254,19 +281,15 @@ fn parse_resp_value(bytes: &[u8], idx: &mut usize) -> io::Result<Reply> {
             *idx += 1;
             let line = read_line(bytes, idx)?;
             let count = parse_i64(line)?;
-            if count < -1 {
-                // resp array length must be -1 or >= 0
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "invalid array length",
-                ));
-            }
-            if count == -1 {
-                // nil array
-                return Ok(Reply::Nil);
-            }
+            let count = match checked_array_len(count)? {
+                Some(count) => count,
+                None => {
+                    // nil array
+                    return Ok(Reply::Nil);
+                }
+            };
 
-            let mut items = Vec::with_capacity(count as usize);
+            let mut items = Vec::with_capacity(count);
             for _ in 0..count {
                 // parse nested values recursively
                 items.push(parse_resp_value(bytes, idx)?);

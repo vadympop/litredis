@@ -3,11 +3,13 @@ use std::{collections::HashSet, sync::Arc};
 use tokio::sync::mpsc::{self, Receiver, Sender, UnboundedReceiver, UnboundedSender};
 
 use crate::commands;
+use crate::commands::misc;
 use crate::protocol::{Command, NormalCommand, Reply, SessionCommand};
 use crate::pubsub::{ClientId, PUBSUB_BUFFER_SIZE, PubSubMessage};
 use crate::server::Shared;
 
 pub struct ClientSession {
+    is_authed: bool,
     client_id: ClientId,
     pubsub_tx: Sender<PubSubMessage>,
     slow_consumer_tx: UnboundedSender<()>,
@@ -46,6 +48,7 @@ impl ClientSession {
                 client_id,
                 pubsub_tx,
                 slow_consumer_tx,
+                is_authed: shared.config.password.is_none(),
                 subscribed_channels: HashSet::new(),
             },
             pubsub_rx,
@@ -55,10 +58,19 @@ impl ClientSession {
 
     pub fn execute(&mut self, cmd: Command, shared: &Arc<Shared>) -> CommandOutcome {
         match cmd {
-            Command::Session(cmd) => self.execute_session(cmd, shared),
+            Command::Auth { password } => self.execute_auth(password, shared),
+            Command::Normal(NormalCommand::Ping(msg)) if !self.is_authed => {
+                CommandOutcome::single(misc::ping(msg))
+            }
+
+            _ if !self.is_authed => {
+                CommandOutcome::single(Reply::Error("NOAUTH Authentication required".into()))
+            }
+
             Command::Normal(NormalCommand::Ping(msg)) if self.is_subscribed() => {
                 CommandOutcome::single(subscribed_pong_reply(msg))
             }
+            Command::Session(cmd) => self.execute_session(cmd, shared),
             Command::Normal(cmd) => {
                 if self.is_subscribed() {
                     CommandOutcome::single(Reply::Error(
@@ -67,6 +79,26 @@ impl ClientSession {
                 } else {
                     CommandOutcome::single(commands::execute(cmd, shared))
                 }
+            }
+        }
+    }
+
+    fn execute_auth(&mut self, password: String, shared: &Arc<Shared>) -> CommandOutcome {
+        match &shared.config.password {
+            None => {
+                // Server has no password
+                CommandOutcome::single(Reply::Error(
+                    "Client sent AUTH but no password is set".into(),
+                ))
+            }
+            Some(expected) if *expected == password => {
+                self.is_authed = true;
+                log::debug!("client authenticated successfully");
+                CommandOutcome::single(Reply::Simple("OK".into()))
+            }
+            Some(_) => {
+                log::warn!("failed authentication attempt");
+                CommandOutcome::single(Reply::Error("WRONGPASS invalid password".into()))
             }
         }
     }

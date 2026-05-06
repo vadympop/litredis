@@ -1,9 +1,11 @@
+mod error;
 pub mod text;
 
 #[derive(Debug)]
 pub enum Command {
     Normal(NormalCommand),
     Session(SessionCommand),
+    Auth { password: String },
 }
 
 #[derive(Debug)]

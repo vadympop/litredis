@@ -128,13 +128,13 @@ where
                 if !remaining.is_empty() {
                     consume_item(&mut remaining);
                 }
-                if let Some(count) = count {
-                    if count > 0 {
-                        let count = i64::try_from(count).map_err(|_| {
-                            io::Error::new(io::ErrorKind::InvalidData, "array length overflow")
-                        })?;
-                        remaining.push(count);
-                    }
+                if let Some(count) = count
+                    && count > 0
+                {
+                    let count = i64::try_from(count).map_err(|_| {
+                        io::Error::new(io::ErrorKind::InvalidData, "array length overflow")
+                    })?;
+                    remaining.push(count);
                 }
             }
             _ => {
@@ -189,7 +189,10 @@ fn checked_array_len(count: i64) -> io::Result<Option<usize>> {
     let count = usize::try_from(count)
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "array length overflow"))?;
     if count > MAX_ARRAY_LEN {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "array too large"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "array too large",
+        ));
     }
     Ok(Some(count))
 }

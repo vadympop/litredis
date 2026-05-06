@@ -52,6 +52,21 @@ pub async fn spawn_server() -> u16 {
     port
 }
 
+pub async fn spawn_server_with_password(password: &str) -> u16 {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let config = Config {
+        port,
+        host: "127.0.0.1".into(),
+        snapshot_path: None,
+        flush_interval: 300,
+        password: Some(password.to_owned()),
+    };
+    tokio::spawn(connections_loop(listener, Shared::create(config)));
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    port
+}
+
 pub async fn spawn_with_snapshot(snapshot: String) -> (u16, Arc<Shared>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();

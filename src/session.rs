@@ -88,7 +88,7 @@ impl ClientSession {
             None => {
                 // Server has no password
                 CommandOutcome::single(Reply::Error(
-                    "ERR Client sent AUTH but no password is set".into(),
+                    "Client sent AUTH but no password is set".into(),
                 ))
             }
             Some(expected) if *expected == password => {

@@ -417,4 +417,41 @@ mod tests {
         assert_eq!(first, first_expected);
         assert_eq!(second, second_expected);
     }
+
+    #[test]
+    fn parse_integer_reply() {
+        let input = b":42\r\n";
+        let reply = parse_resp_frame(input).unwrap();
+        assert!(matches!(reply, Reply::Integer(42)));
+    }
+
+    #[test]
+    fn parse_nil_bulk_reply() {
+        let input = b"$-1\r\n";
+        let reply = parse_resp_frame(input).unwrap();
+        assert!(matches!(reply, Reply::Nil));
+    }
+
+    #[test]
+    fn parse_array_with_mixed_types() {
+        let input = b"*3\r\n$3\r\nfoo\r\n$-1\r\n:7\r\n";
+        let reply = parse_resp_frame(input).unwrap();
+
+        match reply {
+            Reply::Array(items) => {
+                assert_eq!(items.len(), 3);
+                assert!(matches!(items[0], Reply::Bulk(ref s) if s == "foo"));
+                assert!(matches!(items[1], Reply::Nil));
+                assert!(matches!(items[2], Reply::Integer(7)));
+            }
+            _ => panic!("expected array reply"),
+        }
+    }
+
+    #[test]
+    fn format_array_output() {
+        let reply = Reply::Array(vec![Reply::Bulk("a".to_string()), Reply::Integer(2)]);
+        let out = format_reply(&reply);
+        assert_eq!(out, "1) \"a\"\n2) (integer) 2\n");
+    }
 }

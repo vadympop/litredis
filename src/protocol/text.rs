@@ -58,6 +58,9 @@ pub fn parse_command(line: &str) -> Result<Command, ProtocolError> {
                 message: message.clone(),
             }))
         }
+        [cmd, password] if cmd == "AUTH" => Ok(Command::Auth {
+            password: password.clone(),
+        }),
         [cmd] if cmd == "QUIT" => Ok(Command::Session(SessionCommand::Quit)),
         [cmd] if cmd == "RESET" => Ok(Command::Session(SessionCommand::Reset)),
 

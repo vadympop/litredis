@@ -58,7 +58,10 @@ async fn wrong_password_rejected() {
     w.write_all(b"AUTH wrongpass\n").await.unwrap();
     let reply = common::read_reply(&mut r).await;
     assert!(reply.starts_with("-ERR"), "expected error, got: {reply}");
-    assert!(reply.contains("WRONGPASS"), "expected WRONGPASS, got: {reply}");
+    assert!(
+        reply.contains("WRONGPASS"),
+        "expected WRONGPASS, got: {reply}"
+    );
 }
 
 #[tokio::test]
@@ -69,7 +72,10 @@ async fn wrong_password_does_not_unlock() {
     w.write_all(b"AUTH wrongpass\nSET foo bar\n").await.unwrap();
     let _auth_reply = common::read_reply(&mut r).await;
     let cmd_reply = common::read_reply(&mut r).await;
-    assert!(cmd_reply.contains("NOAUTH"), "expected NOAUTH after bad AUTH, got: {cmd_reply}");
+    assert!(
+        cmd_reply.contains("NOAUTH"),
+        "expected NOAUTH after bad AUTH, got: {cmd_reply}"
+    );
 }
 
 // ── correct password ──────────────────────────────────────────────────────────

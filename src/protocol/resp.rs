@@ -4,6 +4,8 @@ use crate::protocol::error::ProtocolError;
 use crate::protocol::{Command, NormalCommand, RespValue, SessionCommand};
 
 const LINE_ENDING: &str = "\r\n";
+const MAX_BULK_LEN: usize = 512 * 1024 * 1024;
+const MAX_ARRAY_LEN: usize = 1_000_000;
 
 pub fn parse_command_args(mut args: Vec<String>) -> Result<Command, ProtocolError> {
     if args.is_empty() {
@@ -171,6 +173,10 @@ where
 
     let count = usize::try_from(count)
         .map_err(|_| ProtocolError::InvalidFrame("array length overflow".into()))?;
+    if count > MAX_ARRAY_LEN {
+        return Err(ProtocolError::InvalidFrame("array too large".into()));
+    }
+
     let mut values = Vec::with_capacity(count);
     for _ in 0..count {
         let prefix = read_prefix(reader).await?;
@@ -221,6 +227,10 @@ where
 
     let len = usize::try_from(len)
         .map_err(|_| ProtocolError::InvalidFrame("bulk length overflow".into()))?;
+    if len > MAX_BULK_LEN {
+        return Err(ProtocolError::InvalidFrame("bulk string too large".into()));
+    }
+
     let mut body = vec![0u8; len + LINE_ENDING.len()];
     reader
         .read_exact(&mut body)
@@ -467,6 +477,24 @@ mod tests {
     async fn read_rejects_invalid_bulk_terminator() {
         assert!(matches!(
             read_frame(b"$3\r\nfooXX").await,
+            Err(ProtocolError::InvalidFrame(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn read_rejects_oversized_bulk_string() {
+        let frame = format!("${}\r\n", MAX_BULK_LEN + 1);
+        assert!(matches!(
+            read_frame(frame.as_bytes()).await,
+            Err(ProtocolError::InvalidFrame(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn read_rejects_oversized_array() {
+        let frame = format!("*{}\r\n", MAX_ARRAY_LEN + 1);
+        assert!(matches!(
+            read_frame(frame.as_bytes()).await,
             Err(ProtocolError::InvalidFrame(_))
         ));
     }

@@ -1,5 +1,5 @@
 use crate::protocol::error::ProtocolError;
-use crate::protocol::{Command, NormalCommand, Reply, SessionCommand};
+use crate::protocol::{Command, NormalCommand, RespValue, SessionCommand};
 
 const LINE_ENDING: &str = "\r\n";
 
@@ -69,19 +69,19 @@ pub fn parse_command(line: &str) -> Result<Command, ProtocolError> {
     }
 }
 
-pub fn encode_reply(reply: &Reply) -> String {
+pub fn encode_resp_value(reply: &RespValue) -> String {
     match reply {
-        Reply::Simple(s) => format!("+{}{}", s, LINE_ENDING),
-        Reply::Error(s) => format!("-ERR {}{}", s, LINE_ENDING),
-        Reply::Integer(n) => format!(":{}{}", n, LINE_ENDING),
-        Reply::Bulk(s) => format!("${}{}{}{1}", s.len(), LINE_ENDING, s),
-        Reply::Array(s) => format!(
+        RespValue::Simple(s) => format!("+{}{}", s, LINE_ENDING),
+        RespValue::Error(s) => format!("-ERR {}{}", s, LINE_ENDING),
+        RespValue::Integer(n) => format!(":{}{}", n, LINE_ENDING),
+        RespValue::Bulk(s) => format!("${}{}{}{1}", s.len(), LINE_ENDING, s),
+        RespValue::Array(s) => format!(
             "*{}{}{}",
             s.len(),
             LINE_ENDING,
-            s.iter().map(encode_reply).collect::<String>()
+            s.iter().map(encode_resp_value).collect::<String>()
         ),
-        Reply::Nil => format!("$-1{}", LINE_ENDING),
+        RespValue::Nil => format!("$-1{}", LINE_ENDING),
     }
 }
 
@@ -186,7 +186,7 @@ mod tests {
     #[test]
     fn encode_simple() {
         assert_eq!(
-            encode_reply(&Reply::Simple("OK".into())),
+            encode_resp_value(&RespValue::Simple("OK".into())),
             format!("+OK{}", LINE_ENDING)
         );
     }
@@ -194,7 +194,7 @@ mod tests {
     #[test]
     fn encode_error() {
         assert_eq!(
-            encode_reply(&Reply::Error("bad".into())),
+            encode_resp_value(&RespValue::Error("bad".into())),
             format!("-ERR bad{}", LINE_ENDING)
         );
     }
@@ -202,7 +202,7 @@ mod tests {
     #[test]
     fn encode_bulk() {
         assert_eq!(
-            encode_reply(&Reply::Bulk("hello".into())),
+            encode_resp_value(&RespValue::Bulk("hello".into())),
             format!("$5{0}hello{0}", LINE_ENDING)
         );
     }
@@ -210,10 +210,10 @@ mod tests {
     #[test]
     fn encode_array_of_bulk_strings() {
         assert_eq!(
-            encode_reply(&Reply::Array(vec![
-                Reply::Bulk("message".into()),
-                Reply::Bulk("news".into()),
-                Reply::Bulk("hello".into()),
+            encode_resp_value(&RespValue::Array(vec![
+                RespValue::Bulk("message".into()),
+                RespValue::Bulk("news".into()),
+                RespValue::Bulk("hello".into()),
             ])),
             format!("*3{0}$7{0}message{0}$4{0}news{0}$5{0}hello{0}", LINE_ENDING)
         );

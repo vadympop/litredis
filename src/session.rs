@@ -4,7 +4,7 @@ use tokio::sync::mpsc::{self, Receiver, Sender, UnboundedReceiver, UnboundedSend
 
 use crate::commands;
 use crate::commands::misc;
-use crate::protocol::{Command, NormalCommand, Reply, SessionCommand};
+use crate::protocol::{Command, NormalCommand, RespValue, SessionCommand};
 use crate::pubsub::{ClientId, PUBSUB_BUFFER_SIZE, PubSubMessage};
 use crate::server::Shared;
 
@@ -17,19 +17,19 @@ pub struct ClientSession {
 }
 
 pub struct CommandOutcome {
-    pub replies: Vec<Reply>,
+    pub replies: Vec<RespValue>,
     pub close_connection: bool,
 }
 
 impl CommandOutcome {
-    pub fn single(reply: Reply) -> Self {
+    pub fn single(reply: RespValue) -> Self {
         Self {
             replies: vec![reply],
             close_connection: false,
         }
     }
 
-    pub fn close(reply: Reply) -> Self {
+    pub fn close(reply: RespValue) -> Self {
         Self {
             replies: vec![reply],
             close_connection: true,
@@ -64,7 +64,7 @@ impl ClientSession {
             }
 
             _ if !self.is_authed => {
-                CommandOutcome::single(Reply::Error("NOAUTH Authentication required".into()))
+                CommandOutcome::single(RespValue::Error("NOAUTH Authentication required".into()))
             }
 
             Command::Normal(NormalCommand::Ping(msg)) if self.is_subscribed() => {
@@ -73,7 +73,7 @@ impl ClientSession {
             Command::Session(cmd) => self.execute_session(cmd, shared),
             Command::Normal(cmd) => {
                 if self.is_subscribed() {
-                    CommandOutcome::single(Reply::Error(
+                    CommandOutcome::single(RespValue::Error(
                         "Can't execute command in subscribed mode".into(),
                     ))
                 } else {
@@ -87,18 +87,18 @@ impl ClientSession {
         match &shared.config.password {
             None => {
                 // Server has no password
-                CommandOutcome::single(Reply::Error(
+                CommandOutcome::single(RespValue::Error(
                     "Client sent AUTH but no password is set".into(),
                 ))
             }
             Some(expected) if *expected == password => {
                 self.is_authed = true;
                 log::debug!("client authenticated successfully");
-                CommandOutcome::single(Reply::Simple("OK".into()))
+                CommandOutcome::single(RespValue::Simple("OK".into()))
             }
             Some(_) => {
                 log::warn!("failed authentication attempt");
-                CommandOutcome::single(Reply::Error("WRONGPASS invalid password".into()))
+                CommandOutcome::single(RespValue::Error("WRONGPASS invalid password".into()))
             }
         }
     }
@@ -107,11 +107,11 @@ impl ClientSession {
         shared.pubsub.unsubscribe_all(self.client_id);
     }
 
-    pub fn pubsub_message_reply(message: PubSubMessage) -> Reply {
-        Reply::Array(vec![
-            Reply::Bulk("message".into()),
-            Reply::Bulk(message.channel),
-            Reply::Bulk(message.message),
+    pub fn pubsub_message_reply(message: PubSubMessage) -> RespValue {
+        RespValue::Array(vec![
+            RespValue::Bulk("message".into()),
+            RespValue::Bulk(message.channel),
+            RespValue::Bulk(message.message),
         ])
     }
 
@@ -138,18 +138,18 @@ impl ClientSession {
             }
             SessionCommand::Quit => {
                 self.cleanup(shared);
-                CommandOutcome::close(Reply::Simple("OK".into()))
+                CommandOutcome::close(RespValue::Simple("OK".into()))
             }
             SessionCommand::Reset => {
                 self.cleanup(shared);
                 self.subscribed_channels.clear();
 
-                CommandOutcome::single(Reply::Simple("RESET".into()))
+                CommandOutcome::single(RespValue::Simple("RESET".into()))
             }
         }
     }
 
-    fn subscribe(&mut self, channel: String, shared: &Arc<Shared>) -> Reply {
+    fn subscribe(&mut self, channel: String, shared: &Arc<Shared>) -> RespValue {
         self.subscribed_channels.insert(channel.clone());
         shared.pubsub.subscribe(
             self.client_id,
@@ -161,7 +161,7 @@ impl ClientSession {
         subscribe_reply(channel, self.subscribed_channels.len())
     }
 
-    fn unsubscribe(&mut self, channels: Vec<String>, shared: &Arc<Shared>) -> Vec<Reply> {
+    fn unsubscribe(&mut self, channels: Vec<String>, shared: &Arc<Shared>) -> Vec<RespValue> {
         let channels_to_remove = if channels.is_empty() {
             self.subscribed_channels.iter().cloned().collect::<Vec<_>>()
         } else {
@@ -188,25 +188,25 @@ impl ClientSession {
     }
 }
 
-fn subscribe_reply(channel: String, count: usize) -> Reply {
-    Reply::Array(vec![
-        Reply::Bulk("subscribe".into()),
-        Reply::Bulk(channel),
-        Reply::Integer(count as i64),
+fn subscribe_reply(channel: String, count: usize) -> RespValue {
+    RespValue::Array(vec![
+        RespValue::Bulk("subscribe".into()),
+        RespValue::Bulk(channel),
+        RespValue::Integer(count as i64),
     ])
 }
 
-fn unsubscribe_reply(channel: Option<String>, count: usize) -> Reply {
-    Reply::Array(vec![
-        Reply::Bulk("unsubscribe".into()),
-        channel.map(Reply::Bulk).unwrap_or(Reply::Nil),
-        Reply::Integer(count as i64),
+fn unsubscribe_reply(channel: Option<String>, count: usize) -> RespValue {
+    RespValue::Array(vec![
+        RespValue::Bulk("unsubscribe".into()),
+        channel.map(RespValue::Bulk).unwrap_or(RespValue::Nil),
+        RespValue::Integer(count as i64),
     ])
 }
 
-fn subscribed_pong_reply(message: Option<String>) -> Reply {
-    Reply::Array(vec![
-        Reply::Bulk("pong".into()),
-        Reply::Bulk(message.unwrap_or_default()),
+fn subscribed_pong_reply(message: Option<String>) -> RespValue {
+    RespValue::Array(vec![
+        RespValue::Bulk("pong".into()),
+        RespValue::Bulk(message.unwrap_or_default()),
     ])
 }

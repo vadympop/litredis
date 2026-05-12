@@ -1,12 +1,12 @@
-use crate::protocol::Reply;
+use crate::protocol::RespValue;
 
-pub fn ping(msg: Option<String>) -> Reply {
+pub fn ping(msg: Option<String>) -> RespValue {
     match msg {
-        None => Reply::Simple("PONG".into()),
-        Some(m) => Reply::Bulk(m),
+        None => RespValue::Simple("PONG".into()),
+        Some(m) => RespValue::Bulk(m),
     }
 }
 
-pub fn echo(msg: String) -> Reply {
-    Reply::Bulk(msg)
+pub fn echo(msg: String) -> RespValue {
+    RespValue::Bulk(msg)
 }

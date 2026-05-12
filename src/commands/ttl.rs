@@ -1,13 +1,13 @@
 // EXPIRE, TTL
 
-use crate::{protocol::Reply, server::Shared};
+use crate::{protocol::RespValue, server::Shared};
 
-pub fn expire(shared: &Shared, key: &str, seconds: u64) -> Reply {
+pub fn expire(shared: &Shared, key: &str, seconds: u64) -> RespValue {
     let store = &shared.store;
-    Reply::Integer(store.expire(key, seconds) as i64)
+    RespValue::Integer(store.expire(key, seconds) as i64)
 }
 
-pub fn ttl(shared: &Shared, key: &str) -> Reply {
+pub fn ttl(shared: &Shared, key: &str) -> RespValue {
     let store = &shared.store;
-    Reply::Integer(store.ttl(key))
+    RespValue::Integer(store.ttl(key))
 }

@@ -13,7 +13,7 @@ use tokio::{
 
 pub const LINE_ENDING: &str = "\r\n";
 
-// ── Reply builders (mirror encode_reply so tests stay in sync with the protocol) ──
+// ── RespValue builders (mirror encode_resp_value so tests stay in sync with the protocol) ──
 
 pub fn simple(s: &str) -> String {
     format!("+{}{}", s, LINE_ENDING)

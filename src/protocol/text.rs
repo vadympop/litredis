@@ -91,6 +91,19 @@ pub fn encode_resp_value(reply: &RespValue) -> String {
     }
 }
 
+pub fn encode_command(args: &[String]) -> Vec<u8> {
+    let mut encoded = Vec::new();
+    encoded.extend_from_slice(format!("*{}{}", args.len(), LINE_ENDING).as_bytes());
+
+    for arg in args {
+        encoded.extend_from_slice(format!("${}{}", arg.len(), LINE_ENDING).as_bytes());
+        encoded.extend_from_slice(arg.as_bytes());
+        encoded.extend_from_slice(LINE_ENDING.as_bytes());
+    }
+
+    encoded
+}
+
 pub async fn read_resp_value<R>(reader: &mut R) -> Result<RespValue, ProtocolError>
 where
     R: AsyncBufRead + AsyncRead + Unpin,
@@ -461,6 +474,27 @@ mod tests {
                 RespValue::Bulk("hello".into()),
             ])),
             format!("*3{0}$7{0}message{0}$4{0}news{0}$5{0}hello{0}", LINE_ENDING)
+        );
+    }
+
+    #[test]
+    fn encode_command_single_argument() {
+        assert_eq!(encode_command(&strings(&["PING"])), b"*1\r\n$4\r\nPING\r\n");
+    }
+
+    #[test]
+    fn encode_command_multiple_arguments() {
+        assert_eq!(
+            encode_command(&strings(&["SET", "foo", "bar"])),
+            b"*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n"
+        );
+    }
+
+    #[test]
+    fn encode_command_preserves_spaces_inside_argument() {
+        assert_eq!(
+            encode_command(&strings(&["SET", "message", "hello world"])),
+            b"*3\r\n$3\r\nSET\r\n$7\r\nmessage\r\n$11\r\nhello world\r\n"
         );
     }
 

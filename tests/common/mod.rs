@@ -4,6 +4,7 @@ use std::{sync::Arc, time::Duration};
 
 use redis_app::{
     config::Config,
+    protocol::text::encode_command,
     server::{Shared, connections_loop},
 };
 use tokio::{
@@ -38,16 +39,11 @@ pub fn nil() -> String {
 // ── Request builders ─────────────────────────────────────────────────────────
 
 pub fn command(args: &[&str]) -> Vec<u8> {
-    let mut encoded = Vec::new();
-    encoded.extend_from_slice(format!("*{}{}", args.len(), LINE_ENDING).as_bytes());
-
-    for arg in args {
-        encoded.extend_from_slice(format!("${}{}", arg.len(), LINE_ENDING).as_bytes());
-        encoded.extend_from_slice(arg.as_bytes());
-        encoded.extend_from_slice(LINE_ENDING.as_bytes());
-    }
-
-    encoded
+    let args = args
+        .iter()
+        .map(|arg| (*arg).to_string())
+        .collect::<Vec<_>>();
+    encode_command(&args)
 }
 
 pub fn commands(commands: &[&[&str]]) -> Vec<u8> {

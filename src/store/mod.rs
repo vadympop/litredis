@@ -136,6 +136,18 @@ impl Store {
         }
     }
 
+    /// Clears a TTL from a key. Returns `false` if the key does not exist or is expired.
+    pub fn persist(&self, key: &str) -> bool {
+        match self.data.get_mut(key) {
+            None => false,
+            Some(r) if r.is_expired() => false,
+            Some(mut r) => {
+                r.expires_at = None;
+                true
+            }
+        }
+    }
+
     /// Deletes expired entries
     pub fn purge_expired(&self) {
         let mut expired_keys = Vec::<String>::new();

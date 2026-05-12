@@ -2,6 +2,7 @@ use std::io;
 
 use clap::Parser;
 use redis_app::protocol::RespValue;
+use redis_app::protocol::text::encode_command;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 
@@ -41,7 +42,13 @@ async fn main() -> io::Result<()> {
             break;
         }
 
-        write_half.write_all(line.as_bytes()).await?;
+        let args = split_args(line.trim_end()).map_err(io::Error::other)?;
+        if args.is_empty() {
+            continue;
+        }
+
+        let command = encode_command(&args);
+        write_half.write_all(&command).await?;
         write_half.flush().await?;
     }
 
@@ -58,6 +65,48 @@ async fn main() -> io::Result<()> {
         Err(e) if e.is_cancelled() => Ok(()),
         Err(e) => Err(io::Error::other(e)),
     }
+}
+
+fn split_args(input: &str) -> Result<Vec<String>, String> {
+    let mut args = Vec::new();
+    let mut chars = input.chars().peekable();
+
+    while let Some(&c) = chars.peek() {
+        if c.is_whitespace() {
+            chars.next();
+            continue;
+        }
+
+        if c == '"' {
+            chars.next();
+            let mut buf = String::new();
+            loop {
+                match chars.next() {
+                    Some('"') => break,
+                    Some('\\') => {
+                        if let Some(escaped) = chars.next() {
+                            buf.push(escaped);
+                        }
+                    }
+                    Some(ch) => buf.push(ch),
+                    None => return Err("unterminated quoted string".into()),
+                }
+            }
+            args.push(buf);
+        } else {
+            let mut buf = String::new();
+            while let Some(&c) = chars.peek() {
+                if c.is_whitespace() {
+                    break;
+                }
+                buf.push(c);
+                chars.next();
+            }
+            args.push(buf);
+        }
+    }
+
+    Ok(args)
 }
 
 async fn read_loop<R>(reader: &mut R) -> io::Result<()>
@@ -414,6 +463,37 @@ mod tests {
         tx.shutdown().await.unwrap();
         let mut reader = BufReader::new(rx);
         read_resp_frame(&mut reader).await.unwrap()
+    }
+
+    #[test]
+    fn split_plain_command() {
+        assert_eq!(split_args("SET foo bar").unwrap(), ["SET", "foo", "bar"]);
+    }
+
+    #[test]
+    fn split_quoted_argument() {
+        assert_eq!(
+            split_args(r#"SET msg "hello world""#).unwrap(),
+            ["SET", "msg", "hello world"]
+        );
+    }
+
+    #[test]
+    fn split_escaped_quote() {
+        assert_eq!(
+            split_args(r#"ECHO "say \"hi\"""#).unwrap(),
+            ["ECHO", r#"say "hi""#]
+        );
+    }
+
+    #[test]
+    fn split_empty_line() {
+        assert!(split_args("   ").unwrap().is_empty());
+    }
+
+    #[test]
+    fn split_unterminated_quote() {
+        assert!(split_args(r#"ECHO "oops"#).is_err());
     }
 
     #[tokio::test]

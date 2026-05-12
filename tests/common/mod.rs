@@ -4,7 +4,7 @@ use std::{sync::Arc, time::Duration};
 
 use redis_app::{
     config::Config,
-    protocol::text::encode_command,
+    protocol::resp::encode_command,
     server::{Shared, connections_loop},
 };
 use tokio::{

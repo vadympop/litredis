@@ -2,7 +2,7 @@ use std::io;
 
 use clap::Parser;
 use redis_app::protocol::RespValue;
-use redis_app::protocol::text::encode_command;
+use redis_app::protocol::resp::encode_command;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 

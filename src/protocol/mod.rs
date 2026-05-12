@@ -1,5 +1,5 @@
 mod error;
-pub mod text;
+pub mod resp;
 
 #[derive(Debug)]
 pub enum Command {

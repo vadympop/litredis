@@ -5,11 +5,6 @@ use crate::protocol::{Command, NormalCommand, RespValue, SessionCommand};
 
 const LINE_ENDING: &str = "\r\n";
 
-pub fn parse_command(line: &str) -> Result<Command, ProtocolError> {
-    let args = split_args(line.trim())?;
-    parse_command_args(args)
-}
-
 pub fn parse_command_args(mut args: Vec<String>) -> Result<Command, ProtocolError> {
     if args.is_empty() {
         return Err(ProtocolError::EmptyCommand);
@@ -284,104 +279,10 @@ fn bytes_to_string(bytes: &[u8]) -> Result<String, ProtocolError> {
         .map_err(|_| ProtocolError::InvalidFrame("non-utf8 string".into()))
 }
 
-/// Splits a command line into tokens, respecting double-quoted strings.
-/// `ECHO "hello world"` → ["ECHO", "hello world"]
-fn split_args(input: &str) -> Result<Vec<String>, ProtocolError> {
-    let mut args = Vec::new();
-    let mut chars = input.chars().peekable();
-
-    while let Some(&c) = chars.peek() {
-        if c.is_whitespace() {
-            chars.next();
-            continue;
-        }
-
-        if c == '"' {
-            chars.next();
-            let mut buf = String::new();
-            loop {
-                match chars.next() {
-                    Some('"') => break,
-                    Some('\\') => {
-                        if let Some(escaped) = chars.next() {
-                            buf.push(escaped);
-                        }
-                    }
-                    Some(ch) => buf.push(ch),
-                    None => return Err(ProtocolError::UnterminatedString),
-                }
-            }
-            args.push(buf);
-        } else {
-            let mut buf = String::new();
-            while let Some(&c) = chars.peek() {
-                if c.is_whitespace() {
-                    break;
-                }
-                buf.push(c);
-                chars.next();
-            }
-            args.push(buf);
-        }
-    }
-
-    Ok(args)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use tokio::io::{AsyncWriteExt, BufReader};
-
-    #[test]
-    fn split_plain() {
-        assert_eq!(split_args("SET foo bar").unwrap(), ["SET", "foo", "bar"]);
-    }
-
-    #[test]
-    fn split_quoted() {
-        assert_eq!(
-            split_args(r#"ECHO "hello world""#).unwrap(),
-            ["ECHO", "hello world"]
-        );
-    }
-
-    #[test]
-    fn split_escaped_quote() {
-        assert_eq!(
-            split_args(r#"ECHO "say \"hi\"""#).unwrap(),
-            ["ECHO", r#"say "hi""#]
-        );
-    }
-
-    #[test]
-    fn unterminated_string() {
-        assert!(split_args(r#"ECHO "oops"#).is_err());
-    }
-
-    #[test]
-    fn parse_ping_bare() {
-        assert!(matches!(
-            parse_command("PING"),
-            Ok(Command::Normal(NormalCommand::Ping(None)))
-        ));
-    }
-
-    #[test]
-    fn parse_ping_msg() {
-        assert!(matches!(
-            parse_command("PING hello"),
-            Ok(Command::Normal(NormalCommand::Ping(Some(_))))
-        ));
-    }
-
-    #[test]
-    fn parse_echo() {
-        assert!(matches!(
-            parse_command("ECHO hi"),
-            Ok(Command::Normal(NormalCommand::Echo(_)))
-        ));
-    }
 
     #[test]
     fn parse_args_ping_bare() {

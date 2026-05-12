@@ -5,7 +5,7 @@ use tokio::io::{AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 
-use crate::protocol::text::{command_from_resp_value, encode_resp_value, read_resp_value};
+use crate::protocol::resp::{command_from_resp_value, encode_resp_value, read_resp_value};
 use crate::protocol::{Command, RespValue};
 use crate::server::Shared;
 use crate::session::{ClientSession, CommandOutcome};

@@ -1,3 +1,5 @@
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt};
+
 use crate::protocol::error::ProtocolError;
 use crate::protocol::{Command, NormalCommand, RespValue, SessionCommand};
 
@@ -89,6 +91,160 @@ pub fn encode_resp_value(reply: &RespValue) -> String {
     }
 }
 
+pub async fn read_resp_value<R>(reader: &mut R) -> Result<RespValue, ProtocolError>
+where
+    R: AsyncBufRead + AsyncRead + Unpin,
+{
+    let prefix = read_prefix(reader).await?;
+    match prefix {
+        b'*' => read_resp_array(reader).await,
+        other => read_resp_non_array_value(reader, other).await,
+    }
+}
+
+async fn read_resp_non_array_value<R>(
+    reader: &mut R,
+    prefix: u8,
+) -> Result<RespValue, ProtocolError>
+where
+    R: AsyncBufRead + AsyncRead + Unpin,
+{
+    match prefix {
+        b'+' => Ok(RespValue::Simple(read_utf8_line(reader).await?)),
+        b'-' => Ok(RespValue::Error(read_utf8_line(reader).await?)),
+        b':' => read_integer(reader).await,
+        b'$' => read_bulk_string(reader).await,
+        _ => Err(ProtocolError::InvalidFrame(
+            "unsupported RESP prefix".into(),
+        )),
+    }
+}
+
+async fn read_resp_array<R>(reader: &mut R) -> Result<RespValue, ProtocolError>
+where
+    R: AsyncBufRead + AsyncRead + Unpin,
+{
+    let line = read_crlf_line(reader).await?;
+    let count = parse_i64(&line)?;
+    if count == -1 {
+        return Err(ProtocolError::InvalidFrame(
+            "null arrays are not supported".into(),
+        ));
+    }
+    if count < -1 {
+        return Err(ProtocolError::InvalidFrame("invalid array length".into()));
+    }
+
+    let count = usize::try_from(count)
+        .map_err(|_| ProtocolError::InvalidFrame("array length overflow".into()))?;
+    let mut values = Vec::with_capacity(count);
+    for _ in 0..count {
+        let prefix = read_prefix(reader).await?;
+        if prefix == b'*' {
+            return Err(ProtocolError::InvalidFrame(
+                "nested arrays are not supported".into(),
+            ));
+        }
+        values.push(read_resp_non_array_value(reader, prefix).await?);
+    }
+
+    Ok(RespValue::Array(values))
+}
+
+async fn read_prefix<R>(reader: &mut R) -> Result<u8, ProtocolError>
+where
+    R: AsyncRead + Unpin,
+{
+    let mut prefix = [0u8; 1];
+    reader
+        .read_exact(&mut prefix)
+        .await
+        .map_err(|e| ProtocolError::InvalidFrame(e.to_string()))?;
+    Ok(prefix[0])
+}
+
+async fn read_integer<R>(reader: &mut R) -> Result<RespValue, ProtocolError>
+where
+    R: AsyncBufRead + Unpin,
+{
+    let line = read_crlf_line(reader).await?;
+    let n = parse_i64(&line)?;
+    Ok(RespValue::Integer(n))
+}
+
+async fn read_bulk_string<R>(reader: &mut R) -> Result<RespValue, ProtocolError>
+where
+    R: AsyncBufRead + AsyncRead + Unpin,
+{
+    let line = read_crlf_line(reader).await?;
+    let len = parse_i64(&line)?;
+    if len == -1 {
+        return Ok(RespValue::Nil);
+    }
+    if len < -1 {
+        return Err(ProtocolError::InvalidFrame("invalid bulk length".into()));
+    }
+
+    let len = usize::try_from(len)
+        .map_err(|_| ProtocolError::InvalidFrame("bulk length overflow".into()))?;
+    let mut body = vec![0u8; len + LINE_ENDING.len()];
+    reader
+        .read_exact(&mut body)
+        .await
+        .map_err(|e| ProtocolError::InvalidFrame(e.to_string()))?;
+
+    if &body[len..] != LINE_ENDING.as_bytes() {
+        return Err(ProtocolError::InvalidFrame(
+            "invalid bulk string terminator".into(),
+        ));
+    }
+
+    let value = bytes_to_string(&body[..len])?;
+    Ok(RespValue::Bulk(value))
+}
+
+async fn read_utf8_line<R>(reader: &mut R) -> Result<String, ProtocolError>
+where
+    R: AsyncBufRead + Unpin,
+{
+    let line = read_crlf_line(reader).await?;
+    bytes_to_string(&line)
+}
+
+async fn read_crlf_line<R>(reader: &mut R) -> Result<Vec<u8>, ProtocolError>
+where
+    R: AsyncBufRead + Unpin,
+{
+    let mut line = Vec::new();
+    let n = reader
+        .read_until(b'\n', &mut line)
+        .await
+        .map_err(|e| ProtocolError::InvalidFrame(e.to_string()))?;
+    if n == 0 {
+        return Err(ProtocolError::InvalidFrame("unexpected EOF".into()));
+    }
+
+    if line.len() < LINE_ENDING.len() || !line.ends_with(LINE_ENDING.as_bytes()) {
+        return Err(ProtocolError::InvalidFrame("invalid line ending".into()));
+    }
+
+    line.truncate(line.len() - LINE_ENDING.len());
+    Ok(line)
+}
+
+fn parse_i64(bytes: &[u8]) -> Result<i64, ProtocolError> {
+    let s = std::str::from_utf8(bytes)
+        .map_err(|_| ProtocolError::InvalidFrame("non-utf8 length".into()))?;
+    s.parse::<i64>()
+        .map_err(|_| ProtocolError::InvalidFrame("invalid length".into()))
+}
+
+fn bytes_to_string(bytes: &[u8]) -> Result<String, ProtocolError> {
+    std::str::from_utf8(bytes)
+        .map(|s| s.to_string())
+        .map_err(|_| ProtocolError::InvalidFrame("non-utf8 string".into()))
+}
+
 /// Splits a command line into tokens, respecting double-quoted strings.
 /// `ECHO "hello world"` → ["ECHO", "hello world"]
 fn split_args(input: &str) -> Result<Vec<String>, ProtocolError> {
@@ -136,6 +292,7 @@ fn split_args(input: &str) -> Result<Vec<String>, ProtocolError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::io::{AsyncWriteExt, BufReader};
 
     #[test]
     fn split_plain() {
@@ -281,7 +438,103 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn read_simple_string_frame() {
+        let value = read_frame(b"+OK\r\n").await.unwrap();
+        assert!(matches!(value, RespValue::Simple(s) if s == "OK"));
+    }
+
+    #[tokio::test]
+    async fn read_integer_frame() {
+        let value = read_frame(b":42\r\n").await.unwrap();
+        assert!(matches!(value, RespValue::Integer(42)));
+    }
+
+    #[tokio::test]
+    async fn read_bulk_string_frame() {
+        let value = read_frame(b"$5\r\nhello\r\n").await.unwrap();
+        assert!(matches!(value, RespValue::Bulk(s) if s == "hello"));
+    }
+
+    #[tokio::test]
+    async fn read_nil_bulk_string_frame() {
+        let value = read_frame(b"$-1\r\n").await.unwrap();
+        assert!(matches!(value, RespValue::Nil));
+    }
+
+    #[tokio::test]
+    async fn read_array_of_bulk_strings_frame() {
+        let value = read_frame(b"*2\r\n$3\r\nGET\r\n$3\r\nfoo\r\n")
+            .await
+            .unwrap();
+
+        match value {
+            RespValue::Array(items) => {
+                assert_eq!(items.len(), 2);
+                assert!(matches!(items[0], RespValue::Bulk(ref s) if s == "GET"));
+                assert!(matches!(items[1], RespValue::Bulk(ref s) if s == "foo"));
+            }
+            other => panic!("expected array, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn read_rejects_nested_array_frame() {
+        assert!(matches!(
+            read_frame(b"*2\r\n$4\r\nECHO\r\n*1\r\n$2\r\nhi\r\n").await,
+            Err(ProtocolError::InvalidFrame(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn read_rejects_invalid_length() {
+        assert!(matches!(
+            read_frame(b"$x\r\n").await,
+            Err(ProtocolError::InvalidFrame(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn read_rejects_invalid_line_ending() {
+        assert!(matches!(
+            read_frame(b"+OK\n").await,
+            Err(ProtocolError::InvalidFrame(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn read_rejects_invalid_bulk_terminator() {
+        assert!(matches!(
+            read_frame(b"$3\r\nfooXX").await,
+            Err(ProtocolError::InvalidFrame(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn read_rejects_unsupported_prefix() {
+        assert!(matches!(
+            read_frame(b"_\r\n").await,
+            Err(ProtocolError::InvalidFrame(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn read_rejects_null_array() {
+        assert!(matches!(
+            read_frame(b"*-1\r\n").await,
+            Err(ProtocolError::InvalidFrame(_))
+        ));
+    }
+
     fn strings(args: &[&str]) -> Vec<String> {
         args.iter().map(|arg| (*arg).to_string()).collect()
+    }
+
+    async fn read_frame(bytes: &[u8]) -> Result<RespValue, ProtocolError> {
+        let (mut tx, rx) = tokio::io::duplex(1024);
+        tx.write_all(bytes).await.unwrap();
+        tx.shutdown().await.unwrap();
+        let mut reader = BufReader::new(rx);
+        read_resp_value(&mut reader).await
     }
 }

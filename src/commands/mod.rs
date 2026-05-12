@@ -24,8 +24,10 @@ pub fn execute(cmd: NormalCommand, shared: &Arc<Shared>) -> RespValue {
         }
         NormalCommand::IncrBy { key, value } => strings::incrby(shared, key, value),
         NormalCommand::Persist { key } => ttl::persist(shared, &key),
-        NormalCommand::Copy { source, destination, replace } => {
-            strings::copy(shared, source, destination, replace)
-        }
+        NormalCommand::Copy {
+            source,
+            destination,
+            replace,
+        } => strings::copy(shared, source, destination, replace),
     }
 }

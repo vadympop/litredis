@@ -9,6 +9,7 @@ pub enum Command {
 }
 
 #[derive(Debug)]
+#[rustfmt::skip]
 pub enum NormalCommand {
     Ping(Option<String>),
     Echo(String),

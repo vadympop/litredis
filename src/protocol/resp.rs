@@ -74,8 +74,8 @@ pub fn parse_command_args(mut args: Vec<String>) -> Result<Command, ProtocolErro
 
 pub fn encode_resp_value(reply: &RespValue) -> String {
     match reply {
-        RespValue::Simple(s) => format!("+{}{}", s, LINE_ENDING),
-        RespValue::Error(s) => format!("-ERR {}{}", s, LINE_ENDING),
+        RespValue::Simple(s) => format!("+{}{}", sanitize_single_line(s), LINE_ENDING),
+        RespValue::Error(s) => format!("-ERR {}{}", sanitize_single_line(s), LINE_ENDING),
         RespValue::Integer(n) => format!(":{}{}", n, LINE_ENDING),
         RespValue::Bulk(s) => format!("${}{}{}{1}", s.len(), LINE_ENDING, s),
         RespValue::Array(s) => format!(
@@ -86,6 +86,10 @@ pub fn encode_resp_value(reply: &RespValue) -> String {
         ),
         RespValue::Nil => format!("$-1{}", LINE_ENDING),
     }
+}
+
+fn sanitize_single_line(s: &str) -> String {
+    s.replace('\r', "\\r").replace('\n', "\\n")
 }
 
 pub fn encode_command(args: &[String]) -> Vec<u8> {
@@ -365,6 +369,22 @@ mod tests {
         assert_eq!(
             encode_resp_value(&RespValue::Error("bad".into())),
             format!("-ERR bad{}", LINE_ENDING)
+        );
+    }
+
+    #[test]
+    fn encode_simple_escapes_crlf() {
+        assert_eq!(
+            encode_resp_value(&RespValue::Simple("OK\r\n:1".into())),
+            format!("+OK\\r\\n:1{}", LINE_ENDING)
+        );
+    }
+
+    #[test]
+    fn encode_error_escapes_crlf() {
+        assert_eq!(
+            encode_resp_value(&RespValue::Error("bad\r\n:1\r\n".into())),
+            format!("-ERR bad\\r\\n:1\\r\\n{}", LINE_ENDING)
         );
     }
 

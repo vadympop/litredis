@@ -4,7 +4,11 @@ use crate::protocol::{Command, NormalCommand, RespValue, SessionCommand};
 const LINE_ENDING: &str = "\r\n";
 
 pub fn parse_command(line: &str) -> Result<Command, ProtocolError> {
-    let mut args = split_args(line.trim())?;
+    let args = split_args(line.trim())?;
+    parse_command_args(args)
+}
+
+pub fn parse_command_args(mut args: Vec<String>) -> Result<Command, ProtocolError> {
     if args.is_empty() {
         return Err(ProtocolError::EmptyCommand);
     }
@@ -184,6 +188,64 @@ mod tests {
     }
 
     #[test]
+    fn parse_args_ping_bare() {
+        assert!(matches!(
+            parse_command_args(strings(&["PING"])),
+            Ok(Command::Normal(NormalCommand::Ping(None)))
+        ));
+    }
+
+    #[test]
+    fn parse_args_lowercase_command() {
+        assert!(matches!(
+            parse_command_args(strings(&["get", "foo"])),
+            Ok(Command::Normal(NormalCommand::Get { key })) if key == "foo"
+        ));
+    }
+
+    #[test]
+    fn parse_args_set_preserves_value_case() {
+        assert!(matches!(
+            parse_command_args(strings(&["set", "foo", "Bar"])),
+            Ok(Command::Normal(NormalCommand::Set { key, value })) if key == "foo" && value == "Bar"
+        ));
+    }
+
+    #[test]
+    fn parse_args_subscribe_multiple_channels() {
+        match parse_command_args(strings(&["SUBSCRIBE", "news", "alerts"])).unwrap() {
+            Command::Session(SessionCommand::Subscribe { channels }) => {
+                assert_eq!(channels, ["news", "alerts"]);
+            }
+            other => panic!("expected subscribe command, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_args_auth() {
+        assert!(matches!(
+            parse_command_args(strings(&["AUTH", "secret"])),
+            Ok(Command::Auth { password }) if password == "secret"
+        ));
+    }
+
+    #[test]
+    fn parse_args_wrong_arity_is_unknown_command() {
+        assert!(matches!(
+            parse_command_args(strings(&["SET", "foo"])),
+            Err(ProtocolError::UnknownCommand(cmd)) if cmd == "SET"
+        ));
+    }
+
+    #[test]
+    fn parse_args_invalid_expire_seconds() {
+        assert!(matches!(
+            parse_command_args(strings(&["EXPIRE", "foo", "soon"])),
+            Err(ProtocolError::InvalidArgument(_))
+        ));
+    }
+
+    #[test]
     fn encode_simple() {
         assert_eq!(
             encode_resp_value(&RespValue::Simple("OK".into())),
@@ -217,5 +279,9 @@ mod tests {
             ])),
             format!("*3{0}$7{0}message{0}$4{0}news{0}$5{0}hello{0}", LINE_ENDING)
         );
+    }
+
+    fn strings(args: &[&str]) -> Vec<String> {
+        args.iter().map(|arg| (*arg).to_string()).collect()
     }
 }

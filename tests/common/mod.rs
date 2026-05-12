@@ -35,6 +35,21 @@ pub fn nil() -> String {
     format!("$-1{}", LINE_ENDING)
 }
 
+// ── Request builders ─────────────────────────────────────────────────────────
+
+pub fn command(args: &[&str]) -> Vec<u8> {
+    let mut encoded = Vec::new();
+    encoded.extend_from_slice(format!("*{}{}", args.len(), LINE_ENDING).as_bytes());
+
+    for arg in args {
+        encoded.extend_from_slice(format!("${}{}", arg.len(), LINE_ENDING).as_bytes());
+        encoded.extend_from_slice(arg.as_bytes());
+        encoded.extend_from_slice(LINE_ENDING.as_bytes());
+    }
+
+    encoded
+}
+
 // ── Server / connection helpers ───────────────────────────────────────────────
 
 pub async fn spawn_server() -> u16 {

@@ -102,6 +102,32 @@ where
     }
 }
 
+pub fn command_from_resp_value(value: RespValue) -> Result<Command, ProtocolError> {
+    let RespValue::Array(items) = value else {
+        return Err(ProtocolError::InvalidFrame(
+            "command must be a RESP array".into(),
+        ));
+    };
+
+    if items.is_empty() {
+        return Err(ProtocolError::EmptyCommand);
+    }
+
+    let mut args = Vec::with_capacity(items.len());
+    for item in items {
+        match item {
+            RespValue::Bulk(arg) => args.push(arg),
+            _ => {
+                return Err(ProtocolError::InvalidFrame(
+                    "command arguments must be bulk strings".into(),
+                ));
+            }
+        }
+    }
+
+    parse_command_args(args)
+}
+
 async fn read_resp_non_array_value<R>(
     reader: &mut R,
     prefix: u8,
@@ -522,6 +548,64 @@ mod tests {
     async fn read_rejects_null_array() {
         assert!(matches!(
             read_frame(b"*-1\r\n").await,
+            Err(ProtocolError::InvalidFrame(_))
+        ));
+    }
+
+    #[test]
+    fn command_from_resp_ping() {
+        assert!(matches!(
+            command_from_resp_value(RespValue::Array(vec![RespValue::Bulk("PING".into())])),
+            Ok(Command::Normal(NormalCommand::Ping(None)))
+        ));
+    }
+
+    #[test]
+    fn command_from_resp_set() {
+        assert!(matches!(
+            command_from_resp_value(RespValue::Array(vec![
+                RespValue::Bulk("SET".into()),
+                RespValue::Bulk("foo".into()),
+                RespValue::Bulk("bar".into()),
+            ])),
+            Ok(Command::Normal(NormalCommand::Set { key, value })) if key == "foo" && value == "bar"
+        ));
+    }
+
+    #[test]
+    fn command_from_resp_rejects_empty_array() {
+        assert!(matches!(
+            command_from_resp_value(RespValue::Array(vec![])),
+            Err(ProtocolError::EmptyCommand)
+        ));
+    }
+
+    #[test]
+    fn command_from_resp_rejects_top_level_bulk() {
+        assert!(matches!(
+            command_from_resp_value(RespValue::Bulk("PING".into())),
+            Err(ProtocolError::InvalidFrame(_))
+        ));
+    }
+
+    #[test]
+    fn command_from_resp_rejects_nested_array_argument() {
+        assert!(matches!(
+            command_from_resp_value(RespValue::Array(vec![
+                RespValue::Bulk("ECHO".into()),
+                RespValue::Array(vec![RespValue::Bulk("hi".into())]),
+            ])),
+            Err(ProtocolError::InvalidFrame(_))
+        ));
+    }
+
+    #[test]
+    fn command_from_resp_rejects_nil_argument() {
+        assert!(matches!(
+            command_from_resp_value(RespValue::Array(vec![
+                RespValue::Bulk("ECHO".into()),
+                RespValue::Nil,
+            ])),
             Err(ProtocolError::InvalidFrame(_))
         ));
     }

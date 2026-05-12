@@ -22,5 +22,10 @@ pub fn execute(cmd: NormalCommand, shared: &Arc<Shared>) -> RespValue {
             let delivered = shared.pubsub.publish(&channel, message);
             RespValue::Integer(delivered as i64)
         }
+        NormalCommand::IncrBy { key, value } => strings::incrby(shared, key, value),
+        NormalCommand::Persist { key } => ttl::persist(shared, &key),
+        NormalCommand::Copy { source, destination, replace } => {
+            strings::copy(shared, source, destination, replace)
+        }
     }
 }

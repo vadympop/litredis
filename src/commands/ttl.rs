@@ -12,7 +12,7 @@ pub fn ttl(shared: &Shared, key: &str) -> RespValue {
     RespValue::Integer(store.ttl(key))
 }
 
-pub fn persist(shared: Shared, key: &str) -> Reply {
+pub fn persist(shared: &Shared, key: &str) -> Reply {
     let store = &shared.store;
     Reply::Integer(store.persist(key) as i64)
 }

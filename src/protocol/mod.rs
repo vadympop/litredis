@@ -21,6 +21,9 @@ pub enum NormalCommand {
     Expire { key: String, seconds: u64 },
     Ttl { key: String },
     Publish { channel: String, message: String },
+    IncrBy { key: String, value: i64 },
+    Persist { key: String },
+    Copy { source: String, destination: String, replace: bool },
 }
 
 #[derive(Debug)]

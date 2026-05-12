@@ -52,10 +52,10 @@ async fn subscribe_and_publish_delivers_message() {
     let (mut sub_r, mut sub_w) = common::connect(port).await;
     let (mut pub_r, mut pub_w) = common::connect(port).await;
 
-    sub_w.write_all(b"SUBSCRIBE news\n").await.unwrap();
+    common::write_command(&mut sub_w, &["SUBSCRIBE", "news"]).await;
     assert_eq!(read_lines(&mut sub_r, 6).await, array_subscribe("news", 1));
 
-    pub_w.write_all(b"PUBLISH news hello\n").await.unwrap();
+    common::write_command(&mut pub_w, &["PUBLISH", "news", "hello"]).await;
     assert_eq!(common::read_reply(&mut pub_r).await, common::integer(1));
     assert_eq!(
         read_lines(&mut sub_r, 7).await,
@@ -69,16 +69,16 @@ async fn unsubscribe_stops_future_messages() {
     let (mut sub_r, mut sub_w) = common::connect(port).await;
     let (mut pub_r, mut pub_w) = common::connect(port).await;
 
-    sub_w.write_all(b"SUBSCRIBE news\n").await.unwrap();
+    common::write_command(&mut sub_w, &["SUBSCRIBE", "news"]).await;
     read_lines(&mut sub_r, 6).await;
 
-    sub_w.write_all(b"UNSUBSCRIBE news\n").await.unwrap();
+    common::write_command(&mut sub_w, &["UNSUBSCRIBE", "news"]).await;
     assert_eq!(
         read_lines(&mut sub_r, 6).await,
         array_unsubscribe("news", 0)
     );
 
-    pub_w.write_all(b"PUBLISH news hello\n").await.unwrap();
+    common::write_command(&mut pub_w, &["PUBLISH", "news", "hello"]).await;
     assert_eq!(common::read_reply(&mut pub_r).await, common::integer(0));
 
     let no_message = timeout(Duration::from_millis(100), read_lines(&mut sub_r, 1)).await;
@@ -90,19 +90,19 @@ async fn subscribed_mode_rejects_kv_commands_until_unsubscribed() {
     let port = common::spawn_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"SET key value\n").await.unwrap();
+    common::write_command(&mut w, &["SET", "key", "value"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::simple("OK"));
 
-    w.write_all(b"SUBSCRIBE news\n").await.unwrap();
+    common::write_command(&mut w, &["SUBSCRIBE", "news"]).await;
     assert_eq!(read_lines(&mut r, 6).await, array_subscribe("news", 1));
 
-    w.write_all(b"GET key\n").await.unwrap();
+    common::write_command(&mut w, &["GET", "key"]).await;
     assert!(common::read_reply(&mut r).await.starts_with("-ERR"));
 
-    w.write_all(b"UNSUBSCRIBE news\n").await.unwrap();
+    common::write_command(&mut w, &["UNSUBSCRIBE", "news"]).await;
     assert_eq!(read_lines(&mut r, 6).await, array_unsubscribe("news", 0));
 
-    w.write_all(b"GET key\n").await.unwrap();
+    common::write_command(&mut w, &["GET", "key"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::bulk("value"));
 }
 
@@ -112,19 +112,19 @@ async fn pubsub_message_does_not_drop_partial_client_command() {
     let (mut sub_r, mut sub_w) = common::connect(port).await;
     let (mut pub_r, mut pub_w) = common::connect(port).await;
 
-    sub_w.write_all(b"SUBSCRIBE news\n").await.unwrap();
+    common::write_command(&mut sub_w, &["SUBSCRIBE", "news"]).await;
     assert_eq!(read_lines(&mut sub_r, 6).await, array_subscribe("news", 1));
 
-    sub_w.write_all(b"PIN").await.unwrap();
+    sub_w.write_all(b"*2\r\n$4\r\nPIN").await.unwrap();
 
-    pub_w.write_all(b"PUBLISH news hello\n").await.unwrap();
+    common::write_command(&mut pub_w, &["PUBLISH", "news", "hello"]).await;
     assert_eq!(common::read_reply(&mut pub_r).await, common::integer(1));
     assert_eq!(
         read_lines(&mut sub_r, 7).await,
         array_message("news", "hello")
     );
 
-    sub_w.write_all(b"G hi\n").await.unwrap();
+    sub_w.write_all(b"G\r\n$2\r\nhi\r\n").await.unwrap();
     assert_eq!(
         read_lines(&mut sub_r, 5).await,
         format!("*2{0}$4{0}pong{0}$2{0}hi{0}", common::LINE_ENDING)

@@ -15,7 +15,7 @@ async fn ping_allowed_before_auth() {
     let port = guarded_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"PING\n").await.unwrap();
+    common::write_command(&mut w, &["PING"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::simple("PONG"));
 }
 
@@ -24,7 +24,7 @@ async fn ping_with_message_allowed_before_auth() {
     let port = guarded_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"PING hello\n").await.unwrap();
+    common::write_command(&mut w, &["PING", "hello"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::bulk("hello"));
 }
 
@@ -33,7 +33,7 @@ async fn command_blocked_before_auth() {
     let port = guarded_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"SET foo bar\n").await.unwrap();
+    common::write_command(&mut w, &["SET", "foo", "bar"]).await;
     let reply = common::read_reply(&mut r).await;
     assert!(reply.contains("NOAUTH"), "expected NOAUTH, got: {reply}");
 }
@@ -43,7 +43,7 @@ async fn get_blocked_before_auth() {
     let port = guarded_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"GET foo\n").await.unwrap();
+    common::write_command(&mut w, &["GET", "foo"]).await;
     let reply = common::read_reply(&mut r).await;
     assert!(reply.contains("NOAUTH"), "expected NOAUTH, got: {reply}");
 }
@@ -55,7 +55,7 @@ async fn wrong_password_rejected() {
     let port = guarded_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"AUTH wrongpass\n").await.unwrap();
+    common::write_command(&mut w, &["AUTH", "wrongpass"]).await;
     let reply = common::read_reply(&mut r).await;
     assert!(reply.starts_with("-ERR"), "expected error, got: {reply}");
     assert!(
@@ -69,7 +69,12 @@ async fn wrong_password_does_not_unlock() {
     let port = guarded_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"AUTH wrongpass\nSET foo bar\n").await.unwrap();
+    w.write_all(&common::commands(&[
+        &["AUTH", "wrongpass"],
+        &["SET", "foo", "bar"],
+    ]))
+    .await
+    .unwrap();
     let _auth_reply = common::read_reply(&mut r).await;
     let cmd_reply = common::read_reply(&mut r).await;
     assert!(
@@ -85,7 +90,7 @@ async fn correct_password_accepted() {
     let port = guarded_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"AUTH secret\n").await.unwrap();
+    common::write_command(&mut w, &["AUTH", "secret"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::simple("OK"));
 }
 
@@ -94,9 +99,13 @@ async fn commands_work_after_auth() {
     let port = guarded_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"AUTH secret\nSET foo bar\nGET foo\n")
-        .await
-        .unwrap();
+    w.write_all(&common::commands(&[
+        &["AUTH", "secret"],
+        &["SET", "foo", "bar"],
+        &["GET", "foo"],
+    ]))
+    .await
+    .unwrap();
 
     assert_eq!(common::read_reply(&mut r).await, common::simple("OK")); // AUTH
     assert_eq!(common::read_reply(&mut r).await, common::simple("OK")); // SET
@@ -110,7 +119,7 @@ async fn auth_on_open_server_returns_error() {
     let port = common::spawn_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"AUTH anything\n").await.unwrap();
+    common::write_command(&mut w, &["AUTH", "anything"]).await;
     let reply = common::read_reply(&mut r).await;
     assert!(reply.starts_with("-ERR"), "expected error, got: {reply}");
 }

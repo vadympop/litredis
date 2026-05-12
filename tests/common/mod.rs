@@ -7,7 +7,7 @@ use redis_app::{
     server::{Shared, connections_loop},
 };
 use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader},
     net::{TcpListener, TcpStream},
 };
 
@@ -48,6 +48,18 @@ pub fn command(args: &[&str]) -> Vec<u8> {
     }
 
     encoded
+}
+
+pub fn commands(commands: &[&[&str]]) -> Vec<u8> {
+    let mut encoded = Vec::new();
+    for args in commands {
+        encoded.extend(command(args));
+    }
+    encoded
+}
+
+pub async fn write_command(writer: &mut (impl AsyncWrite + Unpin), args: &[&str]) {
+    writer.write_all(&command(args)).await.unwrap();
 }
 
 // ── Server / connection helpers ───────────────────────────────────────────────

@@ -19,9 +19,10 @@ pub fn get(shared: &Shared, key: String) -> RespValue {
     }
 }
 
-pub fn del(shared: &Shared, key: String) -> RespValue {
+pub fn del(shared: &Shared, keys: Vec<String>) -> RespValue {
     let store = &shared.store;
-    RespValue::Integer(store.del(&key) as i64)
+    let count: i64 = keys.iter().map(|k| store.del(k) as i64).sum();
+    RespValue::Integer(count)
 }
 
 pub fn exists(shared: &Shared, key: String) -> RespValue {
@@ -29,16 +30,12 @@ pub fn exists(shared: &Shared, key: String) -> RespValue {
     RespValue::Integer(store.exists(&key) as i64)
 }
 
-pub fn incr(shared: &Shared, key: String) -> RespValue {
-    apply_delta(shared, key, 1)
-}
-
-pub fn decr(shared: &Shared, key: String) -> RespValue {
-    apply_delta(shared, key, -1)
-}
-
 pub fn incrby(shared: &Shared, key: String, value: i64) -> RespValue {
     apply_delta(shared, key, value)
+}
+
+pub fn decrby(shared: &Shared, key: String, value: i64) -> RespValue {
+    apply_delta(shared, key, -value)
 }
 
 pub fn copy(shared: &Shared, source: String, destination: String, replace: bool) -> RespValue {

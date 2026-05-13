@@ -15,7 +15,7 @@ pub enum NormalCommand {
     Echo(String),
     Get { key: String },
     Set { key: String, value: String, ttl: Option<u64> },
-    Del { key: String },
+    Del { keys: Vec<String> },
     Exists { key: String },
     Incr { key: String },
     Decr { key: String },
@@ -23,6 +23,7 @@ pub enum NormalCommand {
     Ttl { key: String },
     Publish { channel: String, message: String },
     IncrBy { key: String, value: i64 },
+    DecrBy { key: String, value: i64 },
     Persist { key: String },
     Copy { source: String, destination: String, replace: bool },
 }

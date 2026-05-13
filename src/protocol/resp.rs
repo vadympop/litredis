@@ -47,9 +47,11 @@ pub fn parse_command_args(mut args: Vec<String>) -> Result<Command, ProtocolErro
         }
         [cmd, key, value] if cmd == "INCRBY" => Ok(Command::Normal(NormalCommand::IncrBy {
             key: key.clone(),
-            value: value
-                .parse::<i64>()
-                .map_err(|e| ProtocolError::InvalidArgument(e.to_string()))?,
+            value: parse_integer(value)?,
+        })),
+        [cmd, key, value] if cmd == "DECRBY" => Ok(Command::Normal(NormalCommand::DecrBy {
+            key: key.clone(),
+            value: parse_integer(value)?,
         })),
         [cmd, key, value] if cmd == "EXPIRE" => Ok(Command::Normal(NormalCommand::Expire {
             key: key.clone(),
@@ -119,6 +121,11 @@ pub fn encode_resp_value(reply: &RespValue) -> String {
 
 fn parse_seconds(s: &str) -> Result<u64, ProtocolError> {
     s.parse::<u64>()
+        .map_err(|e| ProtocolError::InvalidArgument(e.to_string()))
+}
+
+fn parse_integer(value: &str) -> Result<i64, ProtocolError> {
+    value.parse::<i64>()
         .map_err(|e| ProtocolError::InvalidArgument(e.to_string()))
 }
 

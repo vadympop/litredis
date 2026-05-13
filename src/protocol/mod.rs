@@ -23,6 +23,7 @@ pub enum NormalCommand {
     Ttl { key: String },
     Publish { channel: String, message: String },
     IncrBy { key: String, value: i64 },
+    DecrBy { key: String, value: i64 },
     Persist { key: String },
     Copy { source: String, destination: String, replace: bool },
 }

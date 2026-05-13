@@ -8,7 +8,7 @@
 
 We built a simplified in-memory key-value server inspired by Redis. It accepts multiple TCP connections simultaneously, stores and retrieves data through a subset of Redis commands, supports real-time messaging between clients via publish/subscribe, and persists data to disk so state survives server restarts. Clients can connect using the standard `redis-cli` tool or the bundled `litredis-cli` binary included in the project.
 
-A big advantage of our project is that this server is compatible with any kind of real redis clients through implemented RESP2 protocol(but including the fact that list of implemented commands is not such big as in the real redis) 
+A big advantage of our project is that this server is compatible with any kind of real redis clients through implemented RESP2 protocol, but including the fact that list of implemented commands is not such big as in the real redis. You can find demo of working example redis-py client with our server in `demo.py` file, all instructions of how to run this script are placed in the top of file.
 
 The motivation was clear: gain experience with asynchronous Rust and networking, and understand how a system like Redis actually works under the hood, not just how to use it. Applications frequently need a fast, shared place to store temporary data such as user sessions, counters, or messages between services. An in-memory server handles this far faster than a traditional database because there is no disk access on every read or write.
 

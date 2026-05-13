@@ -1,7 +1,8 @@
 use std::io;
 
 use clap::Parser;
-use redis_app::protocol::Reply;
+use redis_app::protocol::RespValue;
+use redis_app::protocol::resp::encode_command;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 
@@ -41,7 +42,13 @@ async fn main() -> io::Result<()> {
             break;
         }
 
-        write_half.write_all(line.as_bytes()).await?;
+        let args = split_args(line.trim_end()).map_err(io::Error::other)?;
+        if args.is_empty() {
+            continue;
+        }
+
+        let command = encode_command(&args);
+        write_half.write_all(&command).await?;
         write_half.flush().await?;
     }
 
@@ -58,6 +65,48 @@ async fn main() -> io::Result<()> {
         Err(e) if e.is_cancelled() => Ok(()),
         Err(e) => Err(io::Error::other(e)),
     }
+}
+
+fn split_args(input: &str) -> Result<Vec<String>, String> {
+    let mut args = Vec::new();
+    let mut chars = input.chars().peekable();
+
+    while let Some(&c) = chars.peek() {
+        if c.is_whitespace() {
+            chars.next();
+            continue;
+        }
+
+        if c == '"' {
+            chars.next();
+            let mut buf = String::new();
+            loop {
+                match chars.next() {
+                    Some('"') => break,
+                    Some('\\') => {
+                        if let Some(escaped) = chars.next() {
+                            buf.push(escaped);
+                        }
+                    }
+                    Some(ch) => buf.push(ch),
+                    None => return Err("unterminated quoted string".into()),
+                }
+            }
+            args.push(buf);
+        } else {
+            let mut buf = String::new();
+            while let Some(&c) = chars.peek() {
+                if c.is_whitespace() {
+                    break;
+                }
+                buf.push(c);
+                chars.next();
+            }
+            args.push(buf);
+        }
+    }
+
+    Ok(args)
 }
 
 async fn read_loop<R>(reader: &mut R) -> io::Result<()>
@@ -197,7 +246,7 @@ fn checked_array_len(count: i64) -> io::Result<Option<usize>> {
     Ok(Some(count))
 }
 
-fn parse_resp_frame(bytes: &[u8]) -> io::Result<Reply> {
+fn parse_resp_frame(bytes: &[u8]) -> io::Result<RespValue> {
     // parse exactly one resp value from the frame
     let mut idx = 0;
     let value = parse_resp_value(bytes, &mut idx)?;
@@ -211,7 +260,7 @@ fn parse_resp_frame(bytes: &[u8]) -> io::Result<Reply> {
     Ok(value)
 }
 
-fn parse_resp_value(bytes: &[u8], idx: &mut usize) -> io::Result<Reply> {
+fn parse_resp_value(bytes: &[u8], idx: &mut usize) -> io::Result<RespValue> {
     if *idx >= bytes.len() {
         // guard against empty or truncated frame
         return Err(io::Error::new(
@@ -226,21 +275,21 @@ fn parse_resp_value(bytes: &[u8], idx: &mut usize) -> io::Result<Reply> {
             *idx += 1;
             let line = read_line(bytes, idx)?;
             let s = bytes_to_string(line)?;
-            Ok(Reply::Simple(s))
+            Ok(RespValue::Simple(s))
         }
         b'-' => {
             // error string
             *idx += 1;
             let line = read_line(bytes, idx)?;
             let s = bytes_to_string(line)?;
-            Ok(Reply::Error(s))
+            Ok(RespValue::Error(s))
         }
         b':' => {
             // integer reply
             *idx += 1;
             let line = read_line(bytes, idx)?;
             let n = parse_i64(line)?;
-            Ok(Reply::Integer(n))
+            Ok(RespValue::Integer(n))
         }
         b'$' => {
             // bulk string or nil
@@ -256,7 +305,7 @@ fn parse_resp_value(bytes: &[u8], idx: &mut usize) -> io::Result<Reply> {
             }
             if len == -1 {
                 // nil bulk string
-                return Ok(Reply::Nil);
+                return Ok(RespValue::Nil);
             }
             let len = len as usize;
             if *idx + len + 2 > bytes.len() {
@@ -277,7 +326,7 @@ fn parse_resp_value(bytes: &[u8], idx: &mut usize) -> io::Result<Reply> {
             }
             *idx += 2;
             let s = bytes_to_string(data)?;
-            Ok(Reply::Bulk(s))
+            Ok(RespValue::Bulk(s))
         }
         b'*' => {
             // array or nil array
@@ -288,7 +337,7 @@ fn parse_resp_value(bytes: &[u8], idx: &mut usize) -> io::Result<Reply> {
                 Some(count) => count,
                 None => {
                     // nil array
-                    return Ok(Reply::Nil);
+                    return Ok(RespValue::Nil);
                 }
             };
 
@@ -297,7 +346,7 @@ fn parse_resp_value(bytes: &[u8], idx: &mut usize) -> io::Result<Reply> {
                 // parse nested values recursively
                 items.push(parse_resp_value(bytes, idx)?);
             }
-            Ok(Reply::Array(items))
+            Ok(RespValue::Array(items))
         }
         _ => Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -346,26 +395,26 @@ fn bytes_to_string(bytes: &[u8]) -> io::Result<String> {
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "non-utf8 string"))
 }
 
-fn format_reply(reply: &Reply) -> String {
+fn format_reply(reply: &RespValue) -> String {
     // join lines and ensure trailing newline
     let mut out = format_reply_lines(reply, false).join("\n");
     out.push('\n');
     out
 }
 
-fn format_reply_lines(reply: &Reply, in_array: bool) -> Vec<String> {
+fn format_reply_lines(reply: &RespValue, in_array: bool) -> Vec<String> {
     // convert reply into printable lines
     match reply {
-        Reply::Simple(s) => vec![format_string(s, in_array)],
-        Reply::Error(s) => vec![format!("(error) {}", s)],
-        Reply::Integer(n) => vec![format!("(integer) {}", n)],
-        Reply::Bulk(s) => vec![format_string(s, in_array)],
-        Reply::Array(items) => format_array_lines(items),
-        Reply::Nil => vec!["(nil)".to_string()],
+        RespValue::Simple(s) => vec![format_string(s, in_array)],
+        RespValue::Error(s) => vec![format!("(error) {}", s)],
+        RespValue::Integer(n) => vec![format!("(integer) {}", n)],
+        RespValue::Bulk(s) => vec![format_string(s, in_array)],
+        RespValue::Array(items) => format_array_lines(items),
+        RespValue::Nil => vec!["(nil)".to_string()],
     }
 }
 
-fn format_array_lines(items: &[Reply]) -> Vec<String> {
+fn format_array_lines(items: &[RespValue]) -> Vec<String> {
     if items.is_empty() {
         return vec!["(empty array)".to_string()];
     }
@@ -416,6 +465,37 @@ mod tests {
         read_resp_frame(&mut reader).await.unwrap()
     }
 
+    #[test]
+    fn split_plain_command() {
+        assert_eq!(split_args("SET foo bar").unwrap(), ["SET", "foo", "bar"]);
+    }
+
+    #[test]
+    fn split_quoted_argument() {
+        assert_eq!(
+            split_args(r#"SET msg "hello world""#).unwrap(),
+            ["SET", "msg", "hello world"]
+        );
+    }
+
+    #[test]
+    fn split_escaped_quote() {
+        assert_eq!(
+            split_args(r#"ECHO "say \"hi\"""#).unwrap(),
+            ["ECHO", r#"say "hi""#]
+        );
+    }
+
+    #[test]
+    fn split_empty_line() {
+        assert!(split_args("   ").unwrap().is_empty());
+    }
+
+    #[test]
+    fn split_unterminated_quote() {
+        assert!(split_args(r#"ECHO "oops"#).is_err());
+    }
+
     #[tokio::test]
     async fn read_simple_string_frame() {
         let input = b"+PONG\r\n";
@@ -452,14 +532,14 @@ mod tests {
     fn parse_integer_reply() {
         let input = b":42\r\n";
         let reply = parse_resp_frame(input).unwrap();
-        assert!(matches!(reply, Reply::Integer(42)));
+        assert!(matches!(reply, RespValue::Integer(42)));
     }
 
     #[test]
     fn parse_nil_bulk_reply() {
         let input = b"$-1\r\n";
         let reply = parse_resp_frame(input).unwrap();
-        assert!(matches!(reply, Reply::Nil));
+        assert!(matches!(reply, RespValue::Nil));
     }
 
     #[test]
@@ -468,11 +548,11 @@ mod tests {
         let reply = parse_resp_frame(input).unwrap();
 
         match reply {
-            Reply::Array(items) => {
+            RespValue::Array(items) => {
                 assert_eq!(items.len(), 3);
-                assert!(matches!(items[0], Reply::Bulk(ref s) if s == "foo"));
-                assert!(matches!(items[1], Reply::Nil));
-                assert!(matches!(items[2], Reply::Integer(7)));
+                assert!(matches!(items[0], RespValue::Bulk(ref s) if s == "foo"));
+                assert!(matches!(items[1], RespValue::Nil));
+                assert!(matches!(items[2], RespValue::Integer(7)));
             }
             _ => panic!("expected array reply"),
         }
@@ -480,7 +560,10 @@ mod tests {
 
     #[test]
     fn format_array_output() {
-        let reply = Reply::Array(vec![Reply::Bulk("a".to_string()), Reply::Integer(2)]);
+        let reply = RespValue::Array(vec![
+            RespValue::Bulk("a".to_string()),
+            RespValue::Integer(2),
+        ]);
         let out = format_reply(&reply);
         assert_eq!(out, "1) \"a\"\n2) (integer) 2\n");
     }

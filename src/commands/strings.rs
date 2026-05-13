@@ -1,45 +1,45 @@
 // SET, GET, DEL, EXISTS, INCR, DECR
 
-use crate::protocol::Reply;
+use crate::protocol::RespValue;
 use crate::server::Shared;
 
-pub fn set(shared: &Shared, key: String, value: String) -> Reply {
+pub fn set(shared: &Shared, key: String, value: String) -> RespValue {
     let store = &shared.store;
     store.set(key, value, None);
-    Reply::Simple("OK".to_string())
+    RespValue::Simple("OK".to_string())
 }
 
-pub fn get(shared: &Shared, key: String) -> Reply {
+pub fn get(shared: &Shared, key: String) -> RespValue {
     let store = &shared.store;
     match store.get(&key) {
-        Some(x) => Reply::Bulk(x),
-        None => Reply::Nil,
+        Some(x) => RespValue::Bulk(x),
+        None => RespValue::Nil,
     }
 }
 
-pub fn del(shared: &Shared, key: String) -> Reply {
+pub fn del(shared: &Shared, key: String) -> RespValue {
     let store = &shared.store;
-    Reply::Integer(store.del(&key) as i64)
+    RespValue::Integer(store.del(&key) as i64)
 }
 
-pub fn exists(shared: &Shared, key: String) -> Reply {
+pub fn exists(shared: &Shared, key: String) -> RespValue {
     let store = &shared.store;
-    Reply::Integer(store.exists(&key) as i64)
+    RespValue::Integer(store.exists(&key) as i64)
 }
 
-pub fn incr(shared: &Shared, key: String) -> Reply {
+pub fn incr(shared: &Shared, key: String) -> RespValue {
     apply_delta(shared, key, 1)
 }
 
-pub fn decr(shared: &Shared, key: String) -> Reply {
+pub fn decr(shared: &Shared, key: String) -> RespValue {
     apply_delta(shared, key, -1)
 }
 
 /// Used simultaneously for increment and decrement cmds, set `delta` to `1` or `-1`
-fn apply_delta(shared: &Shared, key: String, delta: i64) -> Reply {
+fn apply_delta(shared: &Shared, key: String, delta: i64) -> RespValue {
     let store = &shared.store;
     match store.incrby(&key, delta) {
-        Ok(x) => Reply::Integer(x),
-        Err(m) => Reply::Error(m.to_string()),
+        Ok(x) => RespValue::Integer(x),
+        Err(m) => RespValue::Error(m.to_string()),
     }
 }

@@ -136,6 +136,33 @@ impl Store {
         }
     }
 
+    /// Clears a TTL from a key. Returns `false` if the key does not exist or is expired.
+    pub fn persist(&self, key: &str) -> bool {
+        match self.data.get_mut(key) {
+            None => false,
+            Some(r) if r.is_expired() => false,
+            Some(mut r) => {
+                r.expires_at = None;
+                true
+            }
+        }
+    }
+
+    /// Copies value (and TTL) from `source` to `destination`.
+    /// Returns `false` if source is missing/expired, or destination exists and `replace` is false.
+    pub fn copy(&self, source: &str, dest: &str, replace: bool) -> bool {
+        let entry = match self.data.get(source) {
+            None => return false,
+            Some(r) if r.is_expired() => return false,
+            Some(r) => r.clone(),
+        };
+        if !replace && self.exists(dest) {
+            return false;
+        }
+        self.data.insert(dest.to_string(), entry);
+        true
+    }
+
     /// Deletes expired entries
     pub fn purge_expired(&self) {
         let mut expired_keys = Vec::<String>::new();

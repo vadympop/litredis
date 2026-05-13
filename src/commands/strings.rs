@@ -1,11 +1,13 @@
 // SET, GET, DEL, EXISTS, INCR, DECR
 
+use std::time::Duration;
+
 use crate::protocol::RespValue;
 use crate::server::Shared;
 
-pub fn set(shared: &Shared, key: String, value: String) -> RespValue {
+pub fn set(shared: &Shared, key: String, value: String, ttl: Option<u64>) -> RespValue {
     let store = &shared.store;
-    store.set(key, value, None);
+    store.set(key, value, ttl.map(Duration::from_secs));
     RespValue::Simple("OK".to_string())
 }
 
@@ -35,7 +37,16 @@ pub fn decr(shared: &Shared, key: String) -> RespValue {
     apply_delta(shared, key, -1)
 }
 
-/// Used simultaneously for increment and decrement cmds, set `delta` to `1` or `-1`
+pub fn incrby(shared: &Shared, key: String, value: i64) -> RespValue {
+    apply_delta(shared, key, value)
+}
+
+pub fn copy(shared: &Shared, source: String, destination: String, replace: bool) -> RespValue {
+    let store = &shared.store;
+    RespValue::Integer(store.copy(&source, &destination, replace) as i64)
+}
+
+/// Used simultaneously for increment, decrement and increment by cmds, set `delta` to `1` or `-1`
 fn apply_delta(shared: &Shared, key: String, delta: i64) -> RespValue {
     let store = &shared.store;
     match store.incrby(&key, delta) {

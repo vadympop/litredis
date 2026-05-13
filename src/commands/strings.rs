@@ -30,14 +30,6 @@ pub fn exists(shared: &Shared, key: String) -> RespValue {
     RespValue::Integer(store.exists(&key) as i64)
 }
 
-pub fn incr(shared: &Shared, key: String) -> RespValue {
-    apply_delta(shared, key, 1)
-}
-
-pub fn decr(shared: &Shared, key: String) -> RespValue {
-    apply_delta(shared, key, -1)
-}
-
 pub fn incrby(shared: &Shared, key: String, value: i64) -> RespValue {
     apply_delta(shared, key, value)
 }

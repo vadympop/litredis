@@ -19,9 +19,10 @@ pub fn get(shared: &Shared, key: String) -> RespValue {
     }
 }
 
-pub fn del(shared: &Shared, key: String) -> RespValue {
+pub fn del(shared: &Shared, keys: Vec<String>) -> RespValue {
     let store = &shared.store;
-    RespValue::Integer(store.del(&key) as i64)
+    let count: i64 = keys.iter().map(|k| store.del(k) as i64).sum();
+    RespValue::Integer(count)
 }
 
 pub fn exists(shared: &Shared, key: String) -> RespValue {

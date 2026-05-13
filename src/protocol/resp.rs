@@ -33,7 +33,9 @@ pub fn parse_command_args(mut args: Vec<String>) -> Result<Command, ProtocolErro
                 ttl,
             }))
         }
-        [cmd, key] if cmd == "DEL" => Ok(Command::Normal(NormalCommand::Del { key: key.clone() })),
+        [cmd, keys @ ..] if cmd == "DEL" && !keys.is_empty() => {
+            Ok(Command::Normal(NormalCommand::Del { keys: keys.to_vec() }))
+        }
         [cmd, key] if cmd == "EXISTS" => {
             Ok(Command::Normal(NormalCommand::Exists { key: key.clone() }))
         }

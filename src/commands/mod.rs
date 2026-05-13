@@ -12,7 +12,7 @@ pub fn execute(cmd: NormalCommand, shared: &Arc<Shared>) -> RespValue {
         NormalCommand::Echo(msg) => misc::echo(msg),
         NormalCommand::Get { key } => strings::get(shared, key),
         NormalCommand::Set { key, value, ttl } => strings::set(shared, key, value, ttl),
-        NormalCommand::Del { key } => strings::del(shared, key),
+        NormalCommand::Del { keys } => strings::del(shared, keys),
         NormalCommand::Exists { key } => strings::exists(shared, key),
         NormalCommand::Incr { key } => strings::incr(shared, key),
         NormalCommand::Decr { key } => strings::decr(shared, key),

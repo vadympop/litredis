@@ -1,5 +1,5 @@
 mod error;
-pub mod text;
+pub mod resp;
 
 #[derive(Debug)]
 pub enum Command {
@@ -32,11 +32,11 @@ pub enum SessionCommand {
 }
 
 #[derive(Debug)]
-pub enum Reply {
+pub enum RespValue {
     Simple(String),
     Error(String),
     Integer(i64),
     Bulk(String),
-    Array(Vec<Reply>),
+    Array(Vec<RespValue>),
     Nil,
 }

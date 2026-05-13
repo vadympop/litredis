@@ -1,7 +1,6 @@
 mod common;
 
 use std::time::Duration;
-use tokio::io::AsyncWriteExt;
 
 // ── SET / GET ────────────────────────────────────────────────────────────────
 
@@ -10,10 +9,10 @@ async fn set_and_get() {
     let port = common::spawn_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"SET foo bar\n").await.unwrap();
+    common::write_command(&mut w, &["SET", "foo", "bar"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::simple("OK"));
 
-    w.write_all(b"GET foo\n").await.unwrap();
+    common::write_command(&mut w, &["GET", "foo"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::bulk("bar"));
 }
 
@@ -22,7 +21,7 @@ async fn get_missing_key_returns_nil() {
     let port = common::spawn_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"GET nosuchkey\n").await.unwrap();
+    common::write_command(&mut w, &["GET", "nosuchkey"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::nil());
 }
 
@@ -31,12 +30,12 @@ async fn set_overwrites_existing_value() {
     let port = common::spawn_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"SET k v1\n").await.unwrap();
+    common::write_command(&mut w, &["SET", "k", "v1"]).await;
     common::read_reply(&mut r).await;
-    w.write_all(b"SET k v2\n").await.unwrap();
+    common::write_command(&mut w, &["SET", "k", "v2"]).await;
     common::read_reply(&mut r).await;
 
-    w.write_all(b"GET k\n").await.unwrap();
+    common::write_command(&mut w, &["GET", "k"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::bulk("v2"));
 }
 
@@ -45,10 +44,10 @@ async fn set_value_with_spaces() {
     let port = common::spawn_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"SET msg \"hello world\"\n").await.unwrap();
+    common::write_command(&mut w, &["SET", "msg", "hello world"]).await;
     common::read_reply(&mut r).await;
 
-    w.write_all(b"GET msg\n").await.unwrap();
+    common::write_command(&mut w, &["GET", "msg"]).await;
     assert_eq!(
         common::read_reply(&mut r).await,
         common::bulk("hello world")
@@ -62,13 +61,13 @@ async fn del_existing_key() {
     let port = common::spawn_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"SET x 1\n").await.unwrap();
+    common::write_command(&mut w, &["SET", "x", "1"]).await;
     common::read_reply(&mut r).await;
 
-    w.write_all(b"DEL x\n").await.unwrap();
+    common::write_command(&mut w, &["DEL", "x"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::integer(1));
 
-    w.write_all(b"GET x\n").await.unwrap();
+    common::write_command(&mut w, &["GET", "x"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::nil());
 }
 
@@ -77,7 +76,7 @@ async fn del_missing_key_returns_zero() {
     let port = common::spawn_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"DEL ghost\n").await.unwrap();
+    common::write_command(&mut w, &["DEL", "ghost"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::integer(0));
 }
 
@@ -88,10 +87,10 @@ async fn exists_present_key() {
     let port = common::spawn_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"SET e 1\n").await.unwrap();
+    common::write_command(&mut w, &["SET", "e", "1"]).await;
     common::read_reply(&mut r).await;
 
-    w.write_all(b"EXISTS e\n").await.unwrap();
+    common::write_command(&mut w, &["EXISTS", "e"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::integer(1));
 }
 
@@ -100,7 +99,7 @@ async fn exists_missing_key() {
     let port = common::spawn_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"EXISTS ghost\n").await.unwrap();
+    common::write_command(&mut w, &["EXISTS", "ghost"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::integer(0));
 }
 
@@ -109,12 +108,12 @@ async fn exists_returns_zero_after_del() {
     let port = common::spawn_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"SET k v\n").await.unwrap();
+    common::write_command(&mut w, &["SET", "k", "v"]).await;
     common::read_reply(&mut r).await;
-    w.write_all(b"DEL k\n").await.unwrap();
+    common::write_command(&mut w, &["DEL", "k"]).await;
     common::read_reply(&mut r).await;
 
-    w.write_all(b"EXISTS k\n").await.unwrap();
+    common::write_command(&mut w, &["EXISTS", "k"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::integer(0));
 }
 
@@ -125,7 +124,7 @@ async fn incr_missing_key_starts_at_one() {
     let port = common::spawn_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"INCR counter\n").await.unwrap();
+    common::write_command(&mut w, &["INCR", "counter"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::integer(1));
 }
 
@@ -135,7 +134,7 @@ async fn incr_increments_sequentially() {
     let (mut r, mut w) = common::connect(port).await;
 
     for expected in 1..=5 {
-        w.write_all(b"INCR n\n").await.unwrap();
+        common::write_command(&mut w, &["INCR", "n"]).await;
         assert_eq!(common::read_reply(&mut r).await, common::integer(expected));
     }
 }
@@ -145,11 +144,11 @@ async fn decr_decrements_sequentially() {
     let port = common::spawn_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"SET n 3\n").await.unwrap();
+    common::write_command(&mut w, &["SET", "n", "3"]).await;
     common::read_reply(&mut r).await;
 
     for expected in [2, 1, 0, -1] {
-        w.write_all(b"DECR n\n").await.unwrap();
+        common::write_command(&mut w, &["DECR", "n"]).await;
         assert_eq!(common::read_reply(&mut r).await, common::integer(expected));
     }
 }
@@ -159,10 +158,10 @@ async fn incr_on_non_integer_returns_error() {
     let port = common::spawn_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"SET k notanumber\n").await.unwrap();
+    common::write_command(&mut w, &["SET", "k", "notanumber"]).await;
     common::read_reply(&mut r).await;
 
-    w.write_all(b"INCR k\n").await.unwrap();
+    common::write_command(&mut w, &["INCR", "k"]).await;
     assert!(common::read_reply(&mut r).await.starts_with("-ERR"));
 }
 
@@ -171,10 +170,10 @@ async fn incr_on_numeric_string() {
     let port = common::spawn_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"SET n 10\n").await.unwrap();
+    common::write_command(&mut w, &["SET", "n", "10"]).await;
     common::read_reply(&mut r).await;
 
-    w.write_all(b"INCR n\n").await.unwrap();
+    common::write_command(&mut w, &["INCR", "n"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::integer(11));
 }
 
@@ -185,10 +184,10 @@ async fn expire_existing_key_returns_one() {
     let port = common::spawn_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"SET session abc\n").await.unwrap();
+    common::write_command(&mut w, &["SET", "session", "abc"]).await;
     common::read_reply(&mut r).await;
 
-    w.write_all(b"EXPIRE session 10\n").await.unwrap();
+    common::write_command(&mut w, &["EXPIRE", "session", "10"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::integer(1));
 }
 
@@ -197,7 +196,7 @@ async fn expire_missing_key_returns_zero() {
     let port = common::spawn_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"EXPIRE ghost 10\n").await.unwrap();
+    common::write_command(&mut w, &["EXPIRE", "ghost", "10"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::integer(0));
 }
 
@@ -206,15 +205,15 @@ async fn expire_removes_key_after_timeout() {
     let port = common::spawn_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"SET temp value\n").await.unwrap();
+    common::write_command(&mut w, &["SET", "temp", "value"]).await;
     common::read_reply(&mut r).await;
 
-    w.write_all(b"EXPIRE temp 1\n").await.unwrap();
+    common::write_command(&mut w, &["EXPIRE", "temp", "1"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::integer(1));
 
     tokio::time::sleep(Duration::from_millis(1200)).await;
 
-    w.write_all(b"GET temp\n").await.unwrap();
+    common::write_command(&mut w, &["GET", "temp"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::nil());
 }
 
@@ -225,7 +224,7 @@ async fn ttl_missing_key_returns_minus_two() {
     let port = common::spawn_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"TTL ghost\n").await.unwrap();
+    common::write_command(&mut w, &["TTL", "ghost"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::integer(-2));
 }
 
@@ -234,10 +233,10 @@ async fn ttl_key_without_expiry_returns_minus_one() {
     let port = common::spawn_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"SET persistent value\n").await.unwrap();
+    common::write_command(&mut w, &["SET", "persistent", "value"]).await;
     common::read_reply(&mut r).await;
 
-    w.write_all(b"TTL persistent\n").await.unwrap();
+    common::write_command(&mut w, &["TTL", "persistent"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::integer(-1));
 }
 
@@ -246,14 +245,14 @@ async fn ttl_expired_key_returns_minus_two() {
     let port = common::spawn_server().await;
     let (mut r, mut w) = common::connect(port).await;
 
-    w.write_all(b"SET short value\n").await.unwrap();
+    common::write_command(&mut w, &["SET", "short", "value"]).await;
     common::read_reply(&mut r).await;
 
-    w.write_all(b"EXPIRE short 1\n").await.unwrap();
+    common::write_command(&mut w, &["EXPIRE", "short", "1"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::integer(1));
 
     tokio::time::sleep(Duration::from_millis(1200)).await;
 
-    w.write_all(b"TTL short\n").await.unwrap();
+    common::write_command(&mut w, &["TTL", "short"]).await;
     assert_eq!(common::read_reply(&mut r).await, common::integer(-2));
 }

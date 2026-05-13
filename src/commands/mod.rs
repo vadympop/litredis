@@ -2,11 +2,11 @@ pub mod misc;
 pub mod strings;
 pub mod ttl;
 
-use crate::protocol::{NormalCommand, Reply};
+use crate::protocol::{NormalCommand, RespValue};
 use crate::server::Shared;
 use std::sync::Arc;
 
-pub fn execute(cmd: NormalCommand, shared: &Arc<Shared>) -> Reply {
+pub fn execute(cmd: NormalCommand, shared: &Arc<Shared>) -> RespValue {
     match cmd {
         NormalCommand::Ping(msg) => misc::ping(msg),
         NormalCommand::Echo(msg) => misc::echo(msg),
@@ -20,7 +20,7 @@ pub fn execute(cmd: NormalCommand, shared: &Arc<Shared>) -> Reply {
         NormalCommand::Ttl { key } => ttl::ttl(shared, &key),
         NormalCommand::Publish { channel, message } => {
             let delivered = shared.pubsub.publish(&channel, message);
-            Reply::Integer(delivered as i64)
+            RespValue::Integer(delivered as i64)
         }
     }
 }

@@ -4,16 +4,17 @@ use std::{sync::Arc, time::Duration};
 
 use redis_app::{
     config::Config,
+    protocol::resp::encode_command,
     server::{Shared, connections_loop},
 };
 use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader},
     net::{TcpListener, TcpStream},
 };
 
 pub const LINE_ENDING: &str = "\r\n";
 
-// ── Reply builders (mirror encode_reply so tests stay in sync with the protocol) ──
+// ── RespValue builders (mirror encode_resp_value so tests stay in sync with the protocol) ──
 
 pub fn simple(s: &str) -> String {
     format!("+{}{}", s, LINE_ENDING)
@@ -33,6 +34,28 @@ pub fn bulk(s: &str) -> String {
 
 pub fn nil() -> String {
     format!("$-1{}", LINE_ENDING)
+}
+
+// ── Request builders ─────────────────────────────────────────────────────────
+
+pub fn command(args: &[&str]) -> Vec<u8> {
+    let args = args
+        .iter()
+        .map(|arg| (*arg).to_string())
+        .collect::<Vec<_>>();
+    encode_command(&args)
+}
+
+pub fn commands(commands: &[&[&str]]) -> Vec<u8> {
+    let mut encoded = Vec::new();
+    for args in commands {
+        encoded.extend(command(args));
+    }
+    encoded
+}
+
+pub async fn write_command(writer: &mut (impl AsyncWrite + Unpin), args: &[&str]) {
+    writer.write_all(&command(args)).await.unwrap();
 }
 
 // ── Server / connection helpers ───────────────────────────────────────────────

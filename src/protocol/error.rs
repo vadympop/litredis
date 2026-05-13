@@ -7,6 +7,7 @@ pub enum ProtocolError {
     UnterminatedString,
     UnknownCommand(String),  // includes the bad command name
     InvalidArgument(String), // includes the parse reason
+    InvalidFrame(String),    // includes the RESP parse reason
 }
 
 impl fmt::Display for ProtocolError {
@@ -16,6 +17,7 @@ impl fmt::Display for ProtocolError {
             Self::UnterminatedString => write!(f, "unterminated quoted string"),
             Self::UnknownCommand(cmd) => write!(f, "unknown or wrong-arity command '{cmd}'"),
             Self::InvalidArgument(reason) => write!(f, "invalid argument: {reason}"),
+            Self::InvalidFrame(reason) => write!(f, "invalid RESP frame: {reason}"),
         }
     }
 }

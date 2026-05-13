@@ -34,7 +34,9 @@ pub fn parse_command_args(mut args: Vec<String>) -> Result<Command, ProtocolErro
             }))
         }
         [cmd, keys @ ..] if cmd == "DEL" && !keys.is_empty() => {
-            Ok(Command::Normal(NormalCommand::Del { keys: keys.to_vec() }))
+            Ok(Command::Normal(NormalCommand::Del {
+                keys: keys.to_vec(),
+            }))
         }
         [cmd, key] if cmd == "EXISTS" => {
             Ok(Command::Normal(NormalCommand::Exists { key: key.clone() }))
@@ -125,7 +127,8 @@ fn parse_seconds(s: &str) -> Result<u64, ProtocolError> {
 }
 
 fn parse_integer(value: &str) -> Result<i64, ProtocolError> {
-    value.parse::<i64>()
+    value
+        .parse::<i64>()
         .map_err(|e| ProtocolError::InvalidArgument(e.to_string()))
 }
 

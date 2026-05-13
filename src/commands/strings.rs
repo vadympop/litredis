@@ -35,7 +35,7 @@ pub fn incrby(shared: &Shared, key: String, value: i64) -> RespValue {
 }
 
 pub fn decrby(shared: &Shared, key: String, value: i64) -> RespValue {
-    apply_delta(shared, key, value*-1)
+    apply_delta(shared, key, -value)
 }
 
 pub fn copy(shared: &Shared, source: String, destination: String, replace: bool) -> RespValue {

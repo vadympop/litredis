@@ -11,7 +11,7 @@ pub fn execute(cmd: NormalCommand, shared: &Arc<Shared>) -> RespValue {
         NormalCommand::Ping(msg) => misc::ping(msg),
         NormalCommand::Echo(msg) => misc::echo(msg),
         NormalCommand::Get { key } => strings::get(shared, key),
-        NormalCommand::Set { key, value } => strings::set(shared, key, value),
+        NormalCommand::Set { key, value, ttl } => strings::set(shared, key, value, ttl),
         NormalCommand::Del { key } => strings::del(shared, key),
         NormalCommand::Exists { key } => strings::exists(shared, key),
         NormalCommand::Incr { key } => strings::incr(shared, key),
@@ -22,5 +22,12 @@ pub fn execute(cmd: NormalCommand, shared: &Arc<Shared>) -> RespValue {
             let delivered = shared.pubsub.publish(&channel, message);
             RespValue::Integer(delivered as i64)
         }
+        NormalCommand::IncrBy { key, value } => strings::incrby(shared, key, value),
+        NormalCommand::Persist { key } => ttl::persist(shared, &key),
+        NormalCommand::Copy {
+            source,
+            destination,
+            replace,
+        } => strings::copy(shared, source, destination, replace),
     }
 }

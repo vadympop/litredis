@@ -9,11 +9,12 @@ pub enum Command {
 }
 
 #[derive(Debug)]
+#[rustfmt::skip]
 pub enum NormalCommand {
     Ping(Option<String>),
     Echo(String),
     Get { key: String },
-    Set { key: String, value: String },
+    Set { key: String, value: String, ttl: Option<u64> },
     Del { key: String },
     Exists { key: String },
     Incr { key: String },
@@ -21,6 +22,9 @@ pub enum NormalCommand {
     Expire { key: String, seconds: u64 },
     Ttl { key: String },
     Publish { channel: String, message: String },
+    IncrBy { key: String, value: i64 },
+    Persist { key: String },
+    Copy { source: String, destination: String, replace: bool },
 }
 
 #[derive(Debug)]

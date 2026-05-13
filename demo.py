@@ -83,8 +83,8 @@ def demo_counters(r: redis.Redis) -> None:
         r.incr("demo:hits")
     step("INCR x3", r.get("demo:hits"))
 
-    # r.decr("demo:hits")
-    # step("DECR", r.get("demo:hits"))
+    r.decr("demo:hits")
+    step("DECR", r.get("demo:hits"))
 
     r.incrby("demo:hits", 10)
     step("INCRBY 10", r.get("demo:hits"))

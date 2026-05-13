@@ -21,9 +21,9 @@ The server must handle multiple simultaneous client connections over TCP and com
 **Core key-value commands:**
 - `SET key value [EX seconds]` - store a value, optionally with a TTL
 - `GET key` - retrieve a value
-- `DEL key` - remove a key
+- `DEL key, ...` - remove keys
 - `EXISTS key` - check whether a key is present
-- `INCR / DECR / INCRBY key [delta]` - increment or decrement a numeric value
+- `INCR key / DECR / INCRBY key [delta] / DECRBY` - increment or decrement a numeric value
 - `EXPIRE key seconds` / `TTL key` / `PERSIST key` - manage key expiration
 - `COPY source destination [REPLACE]` - copy a key with its TTL
 

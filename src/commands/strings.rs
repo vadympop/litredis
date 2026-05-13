@@ -1,11 +1,13 @@
 // SET, GET, DEL, EXISTS, INCR, DECR
 
+use std::time::Duration;
+
 use crate::protocol::RespValue;
 use crate::server::Shared;
 
-pub fn set(shared: &Shared, key: String, value: String) -> RespValue {
+pub fn set(shared: &Shared, key: String, value: String, ttl: Option<u64>) -> RespValue {
     let store = &shared.store;
-    store.set(key, value, None);
+    store.set(key, value, ttl.map(Duration::from_secs));
     RespValue::Simple("OK".to_string())
 }
 

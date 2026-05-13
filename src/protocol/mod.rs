@@ -14,7 +14,7 @@ pub enum NormalCommand {
     Ping(Option<String>),
     Echo(String),
     Get { key: String },
-    Set { key: String, value: String },
+    Set { key: String, value: String, ttl: Option<u64> },
     Del { key: String },
     Exists { key: String },
     Incr { key: String },

@@ -21,10 +21,18 @@ pub fn parse_command_args(mut args: Vec<String>) -> Result<Command, ProtocolErro
         [cmd, key] if cmd == "ECHO" => Ok(Command::Normal(NormalCommand::Echo(key.clone()))),
 
         [cmd, key] if cmd == "GET" => Ok(Command::Normal(NormalCommand::Get { key: key.clone() })),
-        [cmd, key, value] if cmd == "SET" => Ok(Command::Normal(NormalCommand::Set {
-            key: key.clone(),
-            value: value.clone(),
-        })),
+        [cmd, key, value, rest @ ..] if cmd == "SET" => {
+            let ttl = match rest {
+                [] => None,
+                [ex, secs] if ex.eq_ignore_ascii_case("EX") => Some(parse_seconds(secs)?),
+                _ => return Err(ProtocolError::UnknownCommand(cmd.clone())),
+            };
+            Ok(Command::Normal(NormalCommand::Set {
+                key: key.clone(),
+                value: value.clone(),
+                ttl,
+            }))
+        }
         [cmd, key] if cmd == "DEL" => Ok(Command::Normal(NormalCommand::Del { key: key.clone() })),
         [cmd, key] if cmd == "EXISTS" => {
             Ok(Command::Normal(NormalCommand::Exists { key: key.clone() }))
@@ -37,9 +45,7 @@ pub fn parse_command_args(mut args: Vec<String>) -> Result<Command, ProtocolErro
         }
         [cmd, key, value] if cmd == "EXPIRE" => Ok(Command::Normal(NormalCommand::Expire {
             key: key.clone(),
-            seconds: value
-                .parse::<u64>()
-                .map_err(|e| ProtocolError::InvalidArgument(e.to_string()))?,
+            seconds: parse_seconds(value)?,
         })),
         [cmd, key] if cmd == "TTL" => Ok(Command::Normal(NormalCommand::Ttl { key: key.clone() })),
         [cmd, channels @ ..] if cmd == "SUBSCRIBE" && !channels.is_empty() => {
@@ -86,6 +92,11 @@ pub fn encode_resp_value(reply: &RespValue) -> String {
         ),
         RespValue::Nil => format!("$-1{}", LINE_ENDING),
     }
+}
+
+fn parse_seconds(s: &str) -> Result<u64, ProtocolError> {
+    s.parse::<u64>()
+        .map_err(|e| ProtocolError::InvalidArgument(e.to_string()))
 }
 
 fn sanitize_single_line(s: &str) -> String {
@@ -318,7 +329,39 @@ mod tests {
     fn parse_args_set_preserves_value_case() {
         assert!(matches!(
             parse_command_args(strings(&["set", "foo", "Bar"])),
-            Ok(Command::Normal(NormalCommand::Set { key, value })) if key == "foo" && value == "Bar"
+            Ok(Command::Normal(NormalCommand::Set { key, value, ttl: None })) if key == "foo" && value == "Bar"
+        ));
+    }
+
+    #[test]
+    fn parse_args_set_ex() {
+        assert!(matches!(
+            parse_command_args(strings(&["SET", "foo", "bar", "EX", "60"])),
+            Ok(Command::Normal(NormalCommand::Set { key, value, ttl: Some(60) })) if key == "foo" && value == "bar"
+        ));
+    }
+
+    #[test]
+    fn parse_args_set_ex_lowercase() {
+        assert!(matches!(
+            parse_command_args(strings(&["SET", "foo", "bar", "ex", "30"])),
+            Ok(Command::Normal(NormalCommand::Set { ttl: Some(30), .. }))
+        ));
+    }
+
+    #[test]
+    fn parse_args_set_unknown_option() {
+        assert!(matches!(
+            parse_command_args(strings(&["SET", "foo", "bar", "PX", "1000"])),
+            Err(ProtocolError::UnknownCommand(cmd)) if cmd == "SET"
+        ));
+    }
+
+    #[test]
+    fn parse_args_set_ex_invalid_seconds() {
+        assert!(matches!(
+            parse_command_args(strings(&["SET", "foo", "bar", "EX", "soon"])),
+            Err(ProtocolError::InvalidArgument(_))
         ));
     }
 
@@ -551,7 +594,7 @@ mod tests {
                 RespValue::Bulk("foo".into()),
                 RespValue::Bulk("bar".into()),
             ])),
-            Ok(Command::Normal(NormalCommand::Set { key, value })) if key == "foo" && value == "bar"
+            Ok(Command::Normal(NormalCommand::Set { key, value, ttl: None })) if key == "foo" && value == "bar"
         ));
     }
 

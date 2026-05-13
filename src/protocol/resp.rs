@@ -43,11 +43,32 @@ pub fn parse_command_args(mut args: Vec<String>) -> Result<Command, ProtocolErro
         [cmd, key] if cmd == "DECR" => {
             Ok(Command::Normal(NormalCommand::Decr { key: key.clone() }))
         }
+        [cmd, key, value] if cmd == "INCRBY" => Ok(Command::Normal(NormalCommand::IncrBy {
+            key: key.clone(),
+            value: value
+                .parse::<i64>()
+                .map_err(|e| ProtocolError::InvalidArgument(e.to_string()))?,
+        })),
         [cmd, key, value] if cmd == "EXPIRE" => Ok(Command::Normal(NormalCommand::Expire {
             key: key.clone(),
             seconds: parse_seconds(value)?,
         })),
         [cmd, key] if cmd == "TTL" => Ok(Command::Normal(NormalCommand::Ttl { key: key.clone() })),
+        [cmd, key] if cmd == "PERSIST" => {
+            Ok(Command::Normal(NormalCommand::Persist { key: key.clone() }))
+        }
+        [cmd, source, destination, rest @ ..] if cmd == "COPY" => {
+            let replace = match rest {
+                [] => false,
+                [flag] if flag.eq_ignore_ascii_case("REPLACE") => true,
+                _ => return Err(ProtocolError::UnknownCommand(cmd.clone())),
+            };
+            Ok(Command::Normal(NormalCommand::Copy {
+                source: source.clone(),
+                destination: destination.clone(),
+                replace,
+            }))
+        }
         [cmd, channels @ ..] if cmd == "SUBSCRIBE" && !channels.is_empty() => {
             Ok(Command::Session(SessionCommand::Subscribe {
                 channels: channels.to_vec(),
@@ -362,6 +383,71 @@ mod tests {
         assert!(matches!(
             parse_command_args(strings(&["SET", "foo", "bar", "EX", "soon"])),
             Err(ProtocolError::InvalidArgument(_))
+        ));
+    }
+
+    #[test]
+    fn parse_args_incrby() {
+        assert!(matches!(
+            parse_command_args(strings(&["INCRBY", "counter", "5"])),
+            Ok(Command::Normal(NormalCommand::IncrBy { key, value: 5 })) if key == "counter"
+        ));
+    }
+
+    #[test]
+    fn parse_args_incrby_negative() {
+        assert!(matches!(
+            parse_command_args(strings(&["INCRBY", "counter", "-3"])),
+            Ok(Command::Normal(NormalCommand::IncrBy { key, value: -3 })) if key == "counter"
+        ));
+    }
+
+    #[test]
+    fn parse_args_incrby_invalid_value() {
+        assert!(matches!(
+            parse_command_args(strings(&["INCRBY", "counter", "abc"])),
+            Err(ProtocolError::InvalidArgument(_))
+        ));
+    }
+
+    #[test]
+    fn parse_args_persist() {
+        assert!(matches!(
+            parse_command_args(strings(&["PERSIST", "mykey"])),
+            Ok(Command::Normal(NormalCommand::Persist { key })) if key == "mykey"
+        ));
+    }
+
+    #[test]
+    fn parse_args_copy() {
+        assert!(matches!(
+            parse_command_args(strings(&["COPY", "src", "dst"])),
+            Ok(Command::Normal(NormalCommand::Copy { source, destination, replace: false }))
+                if source == "src" && destination == "dst"
+        ));
+    }
+
+    #[test]
+    fn parse_args_copy_replace() {
+        assert!(matches!(
+            parse_command_args(strings(&["COPY", "src", "dst", "REPLACE"])),
+            Ok(Command::Normal(NormalCommand::Copy { replace: true, .. }))
+        ));
+    }
+
+    #[test]
+    fn parse_args_copy_replace_lowercase() {
+        assert!(matches!(
+            parse_command_args(strings(&["COPY", "src", "dst", "replace"])),
+            Ok(Command::Normal(NormalCommand::Copy { replace: true, .. }))
+        ));
+    }
+
+    #[test]
+    fn parse_args_copy_unknown_option() {
+        assert!(matches!(
+            parse_command_args(strings(&["COPY", "src", "dst", "DB", "1"])),
+            Err(ProtocolError::UnknownCommand(cmd)) if cmd == "COPY"
         ));
     }
 

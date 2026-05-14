@@ -149,3 +149,27 @@ Example config file:
 | `clap` | CLI argument parsing |
 | `anyhow` | Error propagation |
 | `log` + `env_logger` | Logging via `RUST_LOG` |
+
+## Diagram
+
+```mermaid
+  flowchart LR
+      Client -->|TCP / RESP2| Listener
+
+      subgraph Server
+          Listener -->|spawn task| Conn
+
+          subgraph Connection
+              Conn[Connection Handler] -->|mpsc| Exec[Command Executor\ntokio::select!]
+              Exec -->|RESP response| Conn
+          end
+
+          Exec -->|read / write| Store[(Store\nDashMap)]
+          Exec -->|publish / subscribe| PubSub[PubSub\nRegistry]
+          PubSub -->|broadcast message| Exec
+
+          Store --> BG[Background Tasks]
+          BG -->|purge_expired\nevery 100 ms| Store
+          BG -->|save_snapshot\nconfigurable| Disk[(dump.json)]
+      end
+```
